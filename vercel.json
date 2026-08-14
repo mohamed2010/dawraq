@@ -3,11 +3,6 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm vercel-build",
   "outputDirectory": "public",
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs22.x"
-    }
-  },
   "rewrites": [
     { "source": "/api/trpc", "destination": "/api/trpc/[...trpc]" },
     { "source": "/api/trpc/:path*", "destination": "/api/trpc/[...trpc]" }

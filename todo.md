@@ -28,3 +28,4 @@
 - [ ] Fix the deployed `/api/trpc` function route, which still returns Vercel 404 despite the static interface loading.
 - [ ] Remove the conflicting legacy `api/[...path].ts` file from GitHub so Vercel can build the single API route.
 - [ ] Fix the Vercel Function invocation failure on `/api/health` and make `/api/trpc/*` resolve to its function.
+- [x] Remove the invalid Vercel Function Runtime declaration that blocks deployment before functions are built.
