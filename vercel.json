@@ -4,7 +4,7 @@
   "buildCommand": "pnpm vercel-build",
   "outputDirectory": "public",
   "functions": {
-    "api/**/*.mjs": {
+    "api/**/*.js": {
       "runtime": "nodejs22.x"
     }
   },
