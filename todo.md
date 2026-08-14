@@ -36,7 +36,7 @@
 - [ ] Merge the reference application features into Zuhaira without weakening per-user data isolation or privacy controls.
 - [x] Migrate the complete project from Vite, Express, and tRPC to a Next.js architecture.
 - [x] Preserve authenticated data isolation, health tracking, and responsive UI during the Next.js migration.
-- [ ] Verify the Next.js build and Vercel deployment before publishing the migration.
+- [x] Verify the Next.js build and Vercel deployment before publishing the migration.
 - [ ] Create a structured reference-feature comparison document covering implemented, newly added, deferred, and intentionally excluded capabilities.
 - [ ] Audit the remaining reference tracker capabilities and either implement them or document the privacy-preserving reason for deferral.
 - [ ] Add automated QA coverage for the newly integrated health-profile, pain, and insight panel workflows.
@@ -44,10 +44,16 @@
 - [ ] Add parent-level mutation error tests to verify the daily-entry save and delete failure messages presented to the user.
 - [ ] Add protected profile API tests to verify that health preferences submitted from ProfileHealthPanel persist per user.
 - [ ] Add authenticated integration-style coverage for insight-panel data derived from realistic cycles and daily entries.
-- [ ] Identify and document the Vercel environment variables required for database access and Manus OAuth.
+- [x] Identify and document the Vercel environment variables required for database access and Manus OAuth.
 - [ ] Configure the production Vercel project with the existing database connection and secure authentication variables.
 - [ ] Redeploy and verify database-backed API routes and OAuth configuration on Vercel.
 - [x] Audit the current MySQL/TiDB schema and map it to PostgreSQL-compatible Supabase tables.
 - [x] Replace MySQL-specific Drizzle access with a PostgreSQL/Supabase-compatible data layer while preserving user isolation.
 - [ ] Migrate existing tracker data to Supabase only after obtaining secure server-side database credentials.
 - [ ] Add the Supabase URL and required server secrets to Vercel without exposing privileged credentials to the browser.
+- [ ] Add available Supabase and Manus OAuth environment variables to Vercel Production and Preview environments.
+- [x] Add Manus OAuth configuration, owner identifier, and a protected JWT session key to Vercel Production and Preview environments.
+- [ ] Add the Supabase PostgreSQL connection variable through the existing Supabase integration or secure connection pooler details.
+- [ ] Verify the deployed auth configuration and database-backed flows after the Vercel environment update.
+- [x] Revoke public execution of the Supabase SECURITY DEFINER helper function created by the initial RLS setup.
+- [x] Document the intentional server-only RLS posture for tracker tables until Supabase Auth policies are introduced.
