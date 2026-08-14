@@ -55,9 +55,10 @@ describe("protected daily-entry router isolation", () => {
 
   it("saves a day through the authenticated user scope", async () => {
     await appRouter.createCaller(userContext(77)).dailyEntries.save({
-      entryDate: "2026-08-14",
-      mood: "neutral",
-      symptoms: ["تقلصات"],
+    entryDate: "2026-08-14",
+    mood: "neutral",
+      painLevel: 2,
+    symptoms: ["تقلصات"],
       notes: null,
     });
     expect(dbMock.saveDailyEntryForUser).toHaveBeenCalledWith(77, expect.objectContaining({ mood: "neutral" }));

@@ -18,7 +18,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const theme = z.enum(["light", "dark", "pink", "purple"]);
-const mood = z.enum(["very_low", "low", "neutral", "good", "great"]);
+const mood = z.enum(["very_low", "low", "neutral", "good", "great", "irritable", "anxious"]);
 const cycleInput = z.object({
   startDate: dateKey,
   endDate: dateKey.nullable(),
@@ -32,6 +32,7 @@ const cycleInput = z.object({
 const dailyEntryInput = z.object({
   entryDate: dateKey,
   mood,
+  painLevel: z.number().int().min(0).max(4),
   symptoms: z.array(z.string().min(1).max(40)).max(10),
   notes: z.string().max(1000).nullable(),
 });
@@ -65,6 +66,9 @@ export const appRouter = router({
     save: protectedProcedure.input(z.object({
       displayName: z.string().trim().min(1).max(80),
       averageCycleLength: z.number().int().min(20).max(45),
+      typicalBleedingDays: z.number().int().min(1).max(14),
+      relationshipStatus: z.enum(["single", "married"]),
+      pregnancyStatus: z.enum(["not_pregnant", "pregnant", "not_sure"]),
       theme,
       stealthMode: z.boolean(),
       onboardingCompleted: z.boolean(),

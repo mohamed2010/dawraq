@@ -28,4 +28,15 @@
 - [ ] Fix the deployed `/api/trpc` function route, which still returns Vercel 404 despite the static interface loading.
 - [ ] Remove the conflicting legacy `api/[...path].ts` file from GitHub so Vercel can build the single API route.
 - [ ] Fix the Vercel Function invocation failure on `/api/health` and make `/api/trpc/*` resolve to its function.
-- [x] Remove the invalid Vercel Function Runtime declaration that blocks deployment before functions are built.
+- [ ] Remove the invalid Vercel Function Runtime declaration that blocks deployment before functions are built.
+- [ ] Research the feature set of the reference التطبيق متابعتي and compare it to Zuhaira.
+- [ ] Define and implement the appropriate missing tracker features in a unified, privacy-preserving experience.
+- [ ] Test the unified feature set and publish the update to GitHub.
+- [ ] Extract and document all implementable features from the provided period-tracker reference application.
+- [ ] Merge the reference application features into Zuhaira without weakening per-user data isolation or privacy controls.
+- [x] Migrate the complete project from Vite, Express, and tRPC to a Next.js architecture.
+- [x] Preserve authenticated data isolation, health tracking, and responsive UI during the Next.js migration.
+- [ ] Verify the Next.js build and Vercel deployment before publishing the migration.
+- [ ] Create a structured reference-feature comparison document covering implemented, newly added, deferred, and intentionally excluded capabilities.
+- [ ] Audit the remaining reference tracker capabilities and either implement them or document the privacy-preserving reason for deferral.
+- [ ] Add automated QA coverage for the newly integrated health-profile, pain, and insight panel workflows.

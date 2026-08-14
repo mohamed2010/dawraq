@@ -48,6 +48,9 @@ export async function getProfileForUser(userId: number) {
 export async function saveProfileForUser(userId: number, input: {
   displayName: string;
   averageCycleLength: number;
+  typicalBleedingDays: number;
+  relationshipStatus: "single" | "married";
+  pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure";
   theme: "light" | "dark" | "pink" | "purple";
   stealthMode: boolean;
   onboardingCompleted: boolean;
@@ -58,6 +61,9 @@ export async function saveProfileForUser(userId: number, input: {
     userId,
     displayName: input.displayName,
     averageCycleLength: input.averageCycleLength,
+    typicalBleedingDays: input.typicalBleedingDays,
+    relationshipStatus: input.relationshipStatus,
+    pregnancyStatus: input.pregnancyStatus,
     theme: input.theme,
     stealthMode: input.stealthMode ? 1 : 0,
     onboardingCompleted: input.onboardingCompleted ? 1 : 0,
@@ -141,7 +147,8 @@ export async function listDailyEntriesForUser(userId: number) {
 
 export async function saveDailyEntryForUser(userId: number, input: {
   entryDate: string;
-  mood: "very_low" | "low" | "neutral" | "good" | "great";
+  mood: "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious";
+  painLevel: number;
   symptoms: string[];
   notes: string | null;
 }) {
@@ -151,12 +158,14 @@ export async function saveDailyEntryForUser(userId: number, input: {
     userId,
     entryDate: input.entryDate,
     mood: input.mood,
+    painLevel: input.painLevel,
     symptomsJson: JSON.stringify(input.symptoms),
     notes: input.notes,
   };
   await db.insert(dailyEntries).values(values).onDuplicateKeyUpdate({
     set: {
       mood: values.mood,
+      painLevel: values.painLevel,
       symptomsJson: values.symptomsJson,
       notes: values.notes,
     },

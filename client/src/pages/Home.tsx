@@ -1,8 +1,11 @@
+"use client";
+
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { trpc } from "@/lib/trpc";
+import { api } from "@/lib/api";
+import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { addCalendarDays, calculateCycleStatistics, dateKey, daysInRange, type CycleRecordForStats } from "@shared/cycleMath";
 import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, CloudOff, Droplets, EyeOff, Flower2, HeartPulse, LogIn, LogOut, MessageCircle, Moon, Pencil, Plus, Send, Settings, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -13,10 +16,12 @@ type ThemeName = "light" | "dark" | "pink" | "purple";
 type CycleRow = CycleRecordForStats & { symptoms: string[]; notes: string | null };
 type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; notes: string };
 type ChatMessage = { id: number; role: "assistant" | "user"; text: string };
-type ProfileData = { displayName: string; averageCycleLength: number; theme: ThemeName; stealthMode: number; onboardingCompleted: number };
-type MoodValue = "very_low" | "low" | "neutral" | "good" | "great";
-type DailyEntryRow = { id: number; entryDate: string; mood: MoodValue; symptoms: string[]; notes: string | null };
-type DailyFormState = { id: number | null; entryDate: string; mood: MoodValue; symptoms: string[]; notes: string };
+type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; stealthMode: number; onboardingCompleted: number };
+type MoodValue = "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious";
+type RelationshipStatus = "single" | "married";
+type PregnancyStatus = "not_pregnant" | "pregnant" | "not_sure";
+type DailyEntryRow = { id: number; entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string | null };
+type DailyFormState = { id: number | null; entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string };
 
 const symptomOptions = ["تقلصات", "صداع", "انتفاخ", "تقلبات مزاجية", "حب الشباب", "إرهاق"];
 const dailySymptomOptions = ["تقلصات", "صداع", "انتفاخ", "إرهاق", "غثيان", "ألم الثدي", "تغير الشهية", "تقلبات مزاجية"];
@@ -26,7 +31,10 @@ const moodOptions: { value: MoodValue; label: string; emoji: string }[] = [
   { value: "neutral", label: "متوازن", emoji: "😐" },
   { value: "good", label: "جيد", emoji: "🙂" },
   { value: "great", label: "ممتاز", emoji: "😄" },
+  { value: "irritable", label: "متوترة", emoji: "😤" },
+  { value: "anxious", label: "قلقة", emoji: "😟" },
 ];
+const painLabels = ["لا يوجد", "خفيف", "متوسط", "مزعج", "شديد"];
 const themes: { value: ThemeName; label: string; className: string }[] = [
   { value: "light", label: "فاتح", className: "" },
   { value: "dark", label: "داكن", className: "dark" },
@@ -45,7 +53,7 @@ function emptyRecordForm(): RecordFormState {
 }
 
 function emptyDailyForm(entryDate = dateKey(new Date())): DailyFormState {
-  return { id: null, entryDate, mood: "neutral", symptoms: [], notes: "" };
+  return { id: null, entryDate, mood: "neutral", painLevel: 0, symptoms: [], notes: "" };
 }
 
 function replyFor(question: string) {
@@ -58,15 +66,15 @@ function replyFor(question: string) {
 
 export default function Home() {
   const { user, loading, isAuthenticated, logout } = useAuth();
-  const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
-  const cyclesQuery = trpc.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
-  const dailyEntriesQuery = trpc.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
-  const saveProfile = trpc.profile.save.useMutation();
-  const createCycle = trpc.cycles.create.useMutation();
-  const updateCycle = trpc.cycles.update.useMutation();
-  const deleteCycle = trpc.cycles.delete.useMutation();
-  const saveDailyEntry = trpc.dailyEntries.save.useMutation();
-  const deleteDailyEntry = trpc.dailyEntries.delete.useMutation();
+  const profileQuery = api.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const cyclesQuery = api.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
+  const dailyEntriesQuery = api.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
+  const saveProfile = api.profile.save.useMutation();
+  const createCycle = api.cycles.create.useMutation();
+  const updateCycle = api.cycles.update.useMutation();
+  const deleteCycle = api.cycles.delete.useMutation();
+  const saveDailyEntry = api.dailyEntries.save.useMutation();
+  const deleteDailyEntry = api.dailyEntries.delete.useMutation();
   const [tab, setTab] = useState<Tab>("home");
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordForm, setRecordForm] = useState<RecordFormState>(emptyRecordForm);
@@ -78,8 +86,14 @@ export default function Home() {
   const [selectedDay, setSelectedDay] = useState(dateKey(new Date()));
   const [settingsName, setSettingsName] = useState("");
   const [settingsCycleLength, setSettingsCycleLength] = useState(28);
+  const [settingsBleedingDays, setSettingsBleedingDays] = useState(5);
+  const [settingsRelationship, setSettingsRelationship] = useState<RelationshipStatus>("single");
+  const [settingsPregnancy, setSettingsPregnancy] = useState<PregnancyStatus>("not_pregnant");
   const [onboardingName, setOnboardingName] = useState("");
   const [onboardingCycleLength, setOnboardingCycleLength] = useState(28);
+  const [onboardingBleedingDays, setOnboardingBleedingDays] = useState(5);
+  const [onboardingRelationship, setOnboardingRelationship] = useState<RelationshipStatus>("single");
+  const [onboardingPregnancy, setOnboardingPregnancy] = useState<PregnancyStatus>("not_pregnant");
   const [onboardingLastPeriod, setOnboardingLastPeriod] = useState(dateKey(new Date()));
   const [onboardingEndDate, setOnboardingEndDate] = useState("");
   const [chatInput, setChatInput] = useState("");
@@ -96,6 +110,9 @@ export default function Home() {
     if (!profile) return;
     setSettingsName(profile.displayName);
     setSettingsCycleLength(profile.averageCycleLength);
+    setSettingsBleedingDays(profile.typicalBleedingDays);
+    setSettingsRelationship(profile.relationshipStatus);
+    setSettingsPregnancy(profile.pregnancyStatus);
   }, [profile]);
 
   useEffect(() => {
@@ -106,12 +123,15 @@ export default function Home() {
     await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch()]);
   };
 
-  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; theme: ThemeName; stealthMode: boolean; onboardingCompleted: boolean }>) => {
+  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
     try {
       await saveProfile.mutateAsync({
         displayName: changes.displayName ?? profile.displayName,
         averageCycleLength: changes.averageCycleLength ?? profile.averageCycleLength,
+        typicalBleedingDays: changes.typicalBleedingDays ?? profile.typicalBleedingDays,
+        relationshipStatus: changes.relationshipStatus ?? profile.relationshipStatus,
+        pregnancyStatus: changes.pregnancyStatus ?? profile.pregnancyStatus,
         theme: changes.theme ?? profile.theme,
         stealthMode: changes.stealthMode ?? Boolean(profile.stealthMode),
         onboardingCompleted: changes.onboardingCompleted ?? Boolean(profile.onboardingCompleted),
@@ -127,7 +147,7 @@ export default function Home() {
     if (!onboardingName.trim()) return toast.error("اكتبي الاسم الذي تريدين ظهوره في التطبيق.");
     if (onboardingEndDate && onboardingEndDate < onboardingLastPeriod) return toast.error("تاريخ النهاية لا يمكن أن يسبق تاريخ البداية.");
     try {
-      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, theme: "pink", stealthMode: false, onboardingCompleted: true });
+      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", stealthMode: false, onboardingCompleted: true });
       await createCycle.mutateAsync({ startDate: onboardingLastPeriod, endDate: onboardingEndDate || null, symptoms: [], notes: "بداية متابعة زُهيرة" });
       await refreshData();
       toast.success("تم تجهيز ملفكِ الخاص بنجاح.");
@@ -173,17 +193,26 @@ export default function Home() {
   };
   const openDailyEntry = (entryDate: string) => {
     const existing = dailyEntries.find(entry => entry.entryDate === entryDate);
-    setDailyForm(existing ? { id: existing.id, entryDate: existing.entryDate, mood: existing.mood, symptoms: existing.symptoms, notes: existing.notes ?? "" } : emptyDailyForm(entryDate));
+    setDailyForm(existing ? { id: existing.id, entryDate: existing.entryDate, mood: existing.mood, painLevel: existing.painLevel, symptoms: existing.symptoms, notes: existing.notes ?? "" } : emptyDailyForm(entryDate));
     setDailyOpen(true);
   };
   const toggleDailySymptom = (symptom: string) => setDailyForm(current => ({ ...current, symptoms: current.symptoms.includes(symptom) ? current.symptoms.filter(item => item !== symptom) : [...current.symptoms, symptom] }));
   const saveDaily = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await saveDailyEntry.mutateAsync({ entryDate: dailyForm.entryDate, mood: dailyForm.mood, symptoms: dailyForm.symptoms, notes: dailyForm.notes.trim() || null });
+      await saveDailyEntry.mutateAsync({ entryDate: dailyForm.entryDate, mood: dailyForm.mood, painLevel: dailyForm.painLevel, symptoms: dailyForm.symptoms, notes: dailyForm.notes.trim() || null });
       setDailyOpen(false);
       await dailyEntriesQuery.refetch();
       toast.success(dailyForm.id ? "تم تعديل متابعة اليوم." : "تم حفظ متابعة اليوم.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ متابعة اليوم الآن.");
+    }
+  };
+  const saveDailyFromPanel = async (input: { entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string | null }) => {
+    try {
+      await saveDailyEntry.mutateAsync(input);
+      await dailyEntriesQuery.refetch();
+      toast.success("تم حفظ متابعة اليوم.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ متابعة اليوم الآن.");
     }
@@ -202,7 +231,7 @@ export default function Home() {
   const saveSettings = async (event: FormEvent) => {
     event.preventDefault();
     if (!settingsName.trim()) return toast.error("الاسم مطلوب.");
-    await saveCurrentProfile({ displayName: settingsName.trim(), averageCycleLength: settingsCycleLength });
+    await saveCurrentProfile({ displayName: settingsName.trim(), averageCycleLength: settingsCycleLength, typicalBleedingDays: settingsBleedingDays, relationshipStatus: settingsRelationship, pregnancyStatus: settingsPregnancy });
     toast.success("تم حفظ الملف الشخصي.");
   };
   const sendChat = (event: FormEvent) => {
@@ -234,9 +263,9 @@ export default function Home() {
         </header>
         {tab === "home" && <HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} />}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
-        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyLogPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onOpen={() => openDailyEntry(selectedDay)} onDelete={setDeleteDailyTarget} /></>}
+        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /></>}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} />}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /></>}
       </div>
       <Navigation active={tab} onChange={setTab} />
       <RecordDialog open={recordOpen} onOpenChange={setRecordOpen} form={recordForm} setForm={setRecordForm} onToggleSymptom={toggleSymptom} onSubmit={saveRecord} busy={isBusy} />
