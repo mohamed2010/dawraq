@@ -1,0 +1,10 @@
+{
+  "name": "زُهيرة — متابعة الدورة",
+  "short_name": "زُهيرة",
+  "lang": "ar",
+  "dir": "rtl",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#fff8fb",
+  "theme_color": "#ed3f73"
+}
