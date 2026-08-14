@@ -4,7 +4,9 @@ import type { TrpcContext } from "./_core/context";
 const dbMock = vi.hoisted(() => ({
   createCycleRecordForUser: vi.fn(async () => 77),
   deleteCycleRecordForUser: vi.fn(async () => undefined),
+  deleteDailyEntryForUser: vi.fn(async () => undefined),
   getProfileForUser: vi.fn(async () => null),
+  listDailyEntriesForUser: vi.fn(async () => []),
   listCycleRecordsForUser: vi.fn(async () => [{
     id: 7,
     userId: 41,
@@ -16,6 +18,7 @@ const dbMock = vi.hoisted(() => ({
     updatedAt: new Date(),
   }]),
   saveProfileForUser: vi.fn(),
+  saveDailyEntryForUser: vi.fn(async () => undefined),
   updateCycleRecordForUser: vi.fn(async () => undefined),
 }));
 

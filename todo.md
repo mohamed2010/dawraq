@@ -16,3 +16,8 @@
 - [x] Verify the public mobile onboarding layout, production build, database migration, and protected-route tests.
 - [x] Verify authenticated contract behavior through protected-route tests and preview auto-session onboarding; complete live OAuth acceptance testing when a user session is available.
 - [x] Save a completion checkpoint and prepare the finished project for delivery.
+- [x] Add account-isolated daily entries for mood, symptoms, and optional notes.
+- [x] Add protected daily-entry create, update, list, and delete procedures with validation.
+- [x] Add calendar day indicators, a daily log editor, and detailed mood/symptom summaries.
+- [x] Test daily-entry isolation and lifecycle rules, validate the migration and production build, and recheck the mobile layout shell.
+- [ ] Save and push the daily tracking update to GitHub.

@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { cycleRecords, InsertUser, userProfiles, users } from "../drizzle/schema";
+import { cycleRecords, dailyEntries, InsertUser, userProfiles, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let database: ReturnType<typeof drizzle> | null = null;
@@ -129,4 +129,44 @@ export async function deleteCycleRecordForUser(userId: number, id: number) {
   const result = await db.delete(cycleRecords)
     .where(and(eq(cycleRecords.id, id), eq(cycleRecords.userId, userId)));
   if (result[0].affectedRows === 0) throw new Error("RECORD_NOT_FOUND");
+}
+
+export async function listDailyEntriesForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select().from(dailyEntries)
+    .where(eq(dailyEntries.userId, userId))
+    .orderBy(desc(dailyEntries.entryDate), desc(dailyEntries.id));
+}
+
+export async function saveDailyEntryForUser(userId: number, input: {
+  entryDate: string;
+  mood: "very_low" | "low" | "neutral" | "good" | "great";
+  symptoms: string[];
+  notes: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const values = {
+    userId,
+    entryDate: input.entryDate,
+    mood: input.mood,
+    symptomsJson: JSON.stringify(input.symptoms),
+    notes: input.notes,
+  };
+  await db.insert(dailyEntries).values(values).onDuplicateKeyUpdate({
+    set: {
+      mood: values.mood,
+      symptomsJson: values.symptomsJson,
+      notes: values.notes,
+    },
+  });
+}
+
+export async function deleteDailyEntryForUser(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const result = await db.delete(dailyEntries)
+    .where(and(eq(dailyEntries.id, id), eq(dailyEntries.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("DAILY_ENTRY_NOT_FOUND");
 }

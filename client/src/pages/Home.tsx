@@ -14,8 +14,19 @@ type CycleRow = CycleRecordForStats & { symptoms: string[]; notes: string | null
 type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; notes: string };
 type ChatMessage = { id: number; role: "assistant" | "user"; text: string };
 type ProfileData = { displayName: string; averageCycleLength: number; theme: ThemeName; stealthMode: number; onboardingCompleted: number };
+type MoodValue = "very_low" | "low" | "neutral" | "good" | "great";
+type DailyEntryRow = { id: number; entryDate: string; mood: MoodValue; symptoms: string[]; notes: string | null };
+type DailyFormState = { id: number | null; entryDate: string; mood: MoodValue; symptoms: string[]; notes: string };
 
 const symptomOptions = ["تقلصات", "صداع", "انتفاخ", "تقلبات مزاجية", "حب الشباب", "إرهاق"];
+const dailySymptomOptions = ["تقلصات", "صداع", "انتفاخ", "إرهاق", "غثيان", "ألم الثدي", "تغير الشهية", "تقلبات مزاجية"];
+const moodOptions: { value: MoodValue; label: string; emoji: string }[] = [
+  { value: "very_low", label: "مرهقة", emoji: "😣" },
+  { value: "low", label: "منخفض", emoji: "😕" },
+  { value: "neutral", label: "متوازن", emoji: "😐" },
+  { value: "good", label: "جيد", emoji: "🙂" },
+  { value: "great", label: "ممتاز", emoji: "😄" },
+];
 const themes: { value: ThemeName; label: string; className: string }[] = [
   { value: "light", label: "فاتح", className: "" },
   { value: "dark", label: "داكن", className: "dark" },
@@ -33,6 +44,10 @@ function emptyRecordForm(): RecordFormState {
   return { id: null, startDate: dateKey(new Date()), endDate: "", symptoms: [], notes: "" };
 }
 
+function emptyDailyForm(entryDate = dateKey(new Date())): DailyFormState {
+  return { id: null, entryDate, mood: "neutral", symptoms: [], notes: "" };
+}
+
 function replyFor(question: string) {
   const normalized = question.trim().toLowerCase();
   if (/تأخر|متأخر|معاد/.test(normalized)) return "قد يحدث التأخر بسبب التوتر أو تغيرات الوزن أو النوم أو الحمل أو أسباب هرمونية. إذا كان هناك احتمال حمل أو استمر التأخر، استخدمي اختباراً مناسباً وتواصلي مع طبيبة. الألم الشديد أو النزيف غير المعتاد يحتاج تقييماً عاجلاً.";
@@ -45,14 +60,20 @@ export default function Home() {
   const { user, loading, isAuthenticated, logout } = useAuth();
   const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const cyclesQuery = trpc.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
+  const dailyEntriesQuery = trpc.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
   const saveProfile = trpc.profile.save.useMutation();
   const createCycle = trpc.cycles.create.useMutation();
   const updateCycle = trpc.cycles.update.useMutation();
   const deleteCycle = trpc.cycles.delete.useMutation();
+  const saveDailyEntry = trpc.dailyEntries.save.useMutation();
+  const deleteDailyEntry = trpc.dailyEntries.delete.useMutation();
   const [tab, setTab] = useState<Tab>("home");
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordForm, setRecordForm] = useState<RecordFormState>(emptyRecordForm);
   const [deleteTarget, setDeleteTarget] = useState<CycleRow | null>(null);
+  const [dailyOpen, setDailyOpen] = useState(false);
+  const [dailyForm, setDailyForm] = useState<DailyFormState>(emptyDailyForm);
+  const [deleteDailyTarget, setDeleteDailyTarget] = useState<DailyEntryRow | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(dateKey(new Date()));
   const [settingsName, setSettingsName] = useState("");
@@ -66,9 +87,10 @@ export default function Home() {
 
   const profile = profileQuery.data;
   const cycles = (cyclesQuery.data ?? []) as CycleRow[];
+  const dailyEntries = (dailyEntriesQuery.data ?? []) as DailyEntryRow[];
   const today = dateKey(new Date());
   const statistics = useMemo(() => calculateCycleStatistics(cycles, profile?.averageCycleLength ?? 28, today), [cycles, profile?.averageCycleLength, today]);
-  const isBusy = saveProfile.isPending || createCycle.isPending || updateCycle.isPending || deleteCycle.isPending;
+  const isBusy = saveProfile.isPending || createCycle.isPending || updateCycle.isPending || deleteCycle.isPending || saveDailyEntry.isPending || deleteDailyEntry.isPending;
 
   useEffect(() => {
     if (!profile) return;
@@ -81,7 +103,7 @@ export default function Home() {
   }, [profile?.theme]);
 
   const refreshData = async () => {
-    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch()]);
+    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch()]);
   };
 
   const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; theme: ThemeName; stealthMode: boolean; onboardingCompleted: boolean }>) => {
@@ -149,6 +171,34 @@ export default function Home() {
       toast.error(error instanceof Error ? error.message : "تعذر حذف السجل.");
     }
   };
+  const openDailyEntry = (entryDate: string) => {
+    const existing = dailyEntries.find(entry => entry.entryDate === entryDate);
+    setDailyForm(existing ? { id: existing.id, entryDate: existing.entryDate, mood: existing.mood, symptoms: existing.symptoms, notes: existing.notes ?? "" } : emptyDailyForm(entryDate));
+    setDailyOpen(true);
+  };
+  const toggleDailySymptom = (symptom: string) => setDailyForm(current => ({ ...current, symptoms: current.symptoms.includes(symptom) ? current.symptoms.filter(item => item !== symptom) : [...current.symptoms, symptom] }));
+  const saveDaily = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      await saveDailyEntry.mutateAsync({ entryDate: dailyForm.entryDate, mood: dailyForm.mood, symptoms: dailyForm.symptoms, notes: dailyForm.notes.trim() || null });
+      setDailyOpen(false);
+      await dailyEntriesQuery.refetch();
+      toast.success(dailyForm.id ? "تم تعديل متابعة اليوم." : "تم حفظ متابعة اليوم.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ متابعة اليوم الآن.");
+    }
+  };
+  const confirmDeleteDaily = async () => {
+    if (!deleteDailyTarget) return;
+    try {
+      await deleteDailyEntry.mutateAsync({ id: deleteDailyTarget.id });
+      setDeleteDailyTarget(null);
+      await dailyEntriesQuery.refetch();
+      toast.success("تم حذف متابعة اليوم.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حذف متابعة اليوم الآن.");
+    }
+  };
   const saveSettings = async (event: FormEvent) => {
     event.preventDefault();
     if (!settingsName.trim()) return toast.error("الاسم مطلوب.");
@@ -163,11 +213,11 @@ export default function Home() {
     setChatInput("");
   };
 
-  if (loading || (isAuthenticated && (profileQuery.isLoading || cyclesQuery.isLoading))) {
+  if (loading || (isAuthenticated && (profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading))) {
     return <div className="tracker-app loading-screen"><Activity className="animate-pulse" size={30} /></div>;
   }
   if (!isAuthenticated) return <LoginPage />;
-  if (profileQuery.isError || cyclesQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
+  if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
   if (!profile?.onboardingCompleted) return <OnboardingPage onSubmit={finishOnboarding} name={onboardingName} setName={setOnboardingName} cycleLength={onboardingCycleLength} setCycleLength={setOnboardingCycleLength} lastPeriod={onboardingLastPeriod} setLastPeriod={setOnboardingLastPeriod} endDate={onboardingEndDate} setEndDate={setOnboardingEndDate} busy={isBusy} />;
   if (profile.stealthMode) return <StealthPage onReturn={() => saveCurrentProfile({ stealthMode: false })} busy={isBusy} />;
 
@@ -184,14 +234,18 @@ export default function Home() {
         </header>
         {tab === "home" && <HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} />}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
-        {tab === "calendar" && <CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} today={today} />}
+        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyLogPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onOpen={() => openDailyEntry(selectedDay)} onDelete={setDeleteDailyTarget} /></>}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
         {tab === "settings" && <SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} />}
       </div>
       <Navigation active={tab} onChange={setTab} />
       <RecordDialog open={recordOpen} onOpenChange={setRecordOpen} form={recordForm} setForm={setRecordForm} onToggleSymptom={toggleSymptom} onSubmit={saveRecord} busy={isBusy} />
+      <DailyEntryDialog open={dailyOpen} onOpenChange={setDailyOpen} form={dailyForm} setForm={setDailyForm} onToggleSymptom={toggleDailySymptom} onSubmit={saveDaily} busy={isBusy} />
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => !open && setDeleteTarget(null)}>
         <AlertDialogContent className="dialog-content" dir="rtl"><AlertDialogHeader><AlertDialogTitle>حذف سجل الدورة؟</AlertDialogTitle><AlertDialogDescription>سيُحذف سجل {deleteTarget ? formatDate(deleteTarget.startDate) : ""} نهائياً من ملفكِ الخاص. لا يمكن التراجع عن ذلك.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>إلغاء</AlertDialogCancel><AlertDialogAction onClick={confirmDelete} className="bg-rose-600 hover:bg-rose-700">حذف السجل</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={Boolean(deleteDailyTarget)} onOpenChange={open => !open && setDeleteDailyTarget(null)}>
+        <AlertDialogContent className="dialog-content" dir="rtl"><AlertDialogHeader><AlertDialogTitle>حذف متابعة هذا اليوم؟</AlertDialogTitle><AlertDialogDescription>سيُحذف المزاج والأعراض والملاحظة المسجلة ليوم {deleteDailyTarget ? formatDate(deleteDailyTarget.entryDate) : ""} من ملفكِ الخاص.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>إلغاء</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteDaily} className="bg-rose-600 hover:bg-rose-700">حذف المتابعة</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   );
@@ -213,12 +267,26 @@ function StatCard({ icon, label, value, hint }: { icon: React.ReactNode; label: 
 
 function RecordsTab({ cycles, onAdd, onEdit, onDelete, onCloseOngoing }: { cycles: CycleRow[]; onAdd: () => void; onEdit: (record: CycleRow) => void; onDelete: (record: CycleRow) => void; onCloseOngoing: (record: CycleRow) => void }) { return <section className="surface-card page-card"><div className="section-header"><div><h2>سجل الدورات</h2><p>يمكنكِ تعديل أي سجل أو حذفه بعد التأكيد.</p></div><button className="primary-button" onClick={onAdd}><Plus size={16} />إضافة</button></div><div className="record-list">{cycles.length ? cycles.map(record => <div className="surface-card record-row" key={record.id}><div className="record-copy"><h3>{formatDate(record.startDate)} {record.endDate ? `— ${formatDate(record.endDate)}` : "— مستمرة"}</h3><p>{record.endDate ? `المدة: ${Math.round((new Date(`${record.endDate}T12:00:00`).getTime() - new Date(`${record.startDate}T12:00:00`).getTime()) / 86400000) + 1} أيام` : "لم يُسجل آخر يوم بعد"}{record.symptoms.length ? ` • ${record.symptoms.join("، ")}` : ""}</p>{record.notes && <p>{record.notes}</p>}<span className={`badge ${record.endDate ? "complete" : ""}`}>{record.endDate ? "مكتملة" : "مستمرة"}</span></div><div className="record-actions">{!record.endDate && <button className="mini-action" aria-label="إضافة تاريخ نهاية الحيض" onClick={() => onCloseOngoing(record)}><CheckCircle2 size={16} /></button>}<button className="mini-action" aria-label="تعديل السجل" onClick={() => onEdit(record)}><Pencil size={15} /></button><button className="mini-action delete" aria-label="حذف السجل" onClick={() => onDelete(record)}><Trash2 size={15} /></button></div></div>) : <div className="empty-state">لا توجد دورات مسجلة بعد. أضيفي أول سجل لبدء التوقعات.</div>}</div></section>; }
 
-function CalendarTab({ cursor, setCursor, selectedDay, setSelectedDay, periodDays, fertileDays, cycles, today }: { cursor: Date; setCursor: (date: Date) => void; selectedDay: string; setSelectedDay: (date: string) => void; periodDays: Set<string>; fertileDays: Set<string>; cycles: CycleRow[]; today: string }) { const year = cursor.getFullYear(); const month = cursor.getMonth(); const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7; const totalDays = new Date(year, month + 1, 0).getDate(); const selectedRecord = cycles.find(record => selectedDay >= record.startDate && selectedDay <= (record.endDate ?? today)); const selection = selectedRecord ? `حيض ${selectedRecord.endDate ? "مسجل" : "مستمر"} في هذا اليوم.` : fertileDays.has(selectedDay) ? "هذا اليوم ضمن نافذة الخصوبة المتوقعة." : "لا يوجد سجل أو توقع خاص لهذا اليوم."; return <section className="surface-card page-card"><div><h2>التقويم الشهري</h2><p>اضغطي على أي يوم لرؤية ملخصه.</p></div><div className="calendar-head"><div className="calendar-nav"><button aria-label="الشهر السابق" onClick={() => setCursor(new Date(year, month - 1, 1))}><ChevronRight size={17} /></button><button aria-label="الشهر التالي" onClick={() => setCursor(new Date(year, month + 1, 1))}><ChevronLeft size={17} /></button></div><h3>{monthNames[month]} {year}</h3></div><div className="weekday-grid">{weekdays.map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: firstOffset }).map((_, index) => <span className="calendar-blank" key={`blank-${index}`} />)}{Array.from({ length: totalDays }).map((_, index) => { const day = index + 1; const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`; const className = `calendar-day ${periodDays.has(key) ? "period" : ""} ${fertileDays.has(key) ? "fertile" : ""} ${key === today ? "today" : ""} ${key === selectedDay ? "selected" : ""}`; return <button key={key} className={className} onClick={() => setSelectedDay(key)} aria-label={formatDate(key)}>{day}</button>; })}</div><div className="legend"><span><i />أيام الحيض</span><span><i className="fertile-dot" />الخصوبة المتوقعة</span><span><i className="today-dot" />اليوم</span></div><div className="day-detail"><strong>{formatDate(selectedDay)}</strong><br />{selection}</div></section>; }
+function DailyLogPanel({ entryDate, entry, onOpen, onDelete }: { entryDate: string; entry: DailyEntryRow | null; onOpen: () => void; onDelete: (entry: DailyEntryRow) => void }) { const mood = entry ? moodOptions.find(option => option.value === entry.mood) : null; return <section className="surface-card page-card daily-log-panel"><div className="section-header"><div><h2>متابعة يومكِ</h2><p>{formatDate(entryDate)}</p></div>{entry && <span className={`mood-pill mood-${entry.mood}`}>{mood?.emoji} {mood?.label}</span>}</div>{entry ? <><p className="daily-panel-copy">{entry.symptoms.length ? `الأعراض المسجلة: ${entry.symptoms.join("، ")}` : "لم تُسجل أعراض لهذا اليوم."}</p>{entry.notes && <p className="daily-panel-copy">ملاحظتكِ: {entry.notes}</p>}<div className="day-actions"><button className="secondary-button" onClick={onOpen}><Pencil size={15} />تعديل المتابعة</button><button className="mini-action delete" aria-label="حذف متابعة اليوم" onClick={() => onDelete(entry)}><Trash2 size={15} /></button></div></> : <><p className="daily-panel-copy">سجلي مزاجكِ أو الأعراض التي لاحظتها اليوم لتكوين صورة أوضح عن نمطكِ الشخصي.</p><button className="primary-button" onClick={onOpen}><Plus size={16} />إضافة متابعة يومية</button></>}</section>; }
+
+function CalendarTab({ cursor, setCursor, selectedDay, setSelectedDay, periodDays, fertileDays, cycles, dailyEntries, today }: { cursor: Date; setCursor: (date: Date) => void; selectedDay: string; setSelectedDay: (date: string) => void; periodDays: Set<string>; fertileDays: Set<string>; cycles: CycleRow[]; dailyEntries: DailyEntryRow[]; today: string }) {
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const dailyByDate = new Map(dailyEntries.map(entry => [entry.entryDate, entry]));
+  const selectedRecord = cycles.find(record => selectedDay >= record.startDate && selectedDay <= (record.endDate ?? today));
+  const selection = selectedRecord ? `حيض ${selectedRecord.endDate ? "مسجل" : "مستمر"} في هذا اليوم.` : fertileDays.has(selectedDay) ? "هذا اليوم ضمن نافذة الخصوبة المتوقعة." : "لا يوجد سجل أو توقع خاص لهذا اليوم.";
+
+  return <section className="surface-card page-card"><div><h2>التقويم الشهري</h2><p>اضغطي على أي يوم لرؤية ملخصه أو تسجيل متابعة يومية.</p></div><div className="calendar-head"><div className="calendar-nav"><button aria-label="الشهر السابق" onClick={() => setCursor(new Date(year, month - 1, 1))}><ChevronRight size={17} /></button><button aria-label="الشهر التالي" onClick={() => setCursor(new Date(year, month + 1, 1))}><ChevronLeft size={17} /></button></div><h3>{monthNames[month]} {year}</h3></div><div className="weekday-grid">{weekdays.map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: firstOffset }).map((_, index) => <span className="calendar-blank" key={`blank-${index}`} />)}{Array.from({ length: totalDays }).map((_, index) => { const day = index + 1; const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`; const entry = dailyByDate.get(key); const className = `calendar-day ${periodDays.has(key) ? "period" : ""} ${fertileDays.has(key) ? "fertile" : ""} ${entry ? "daily" : ""} ${key === today ? "today" : ""} ${key === selectedDay ? "selected" : ""}`; return <button key={key} className={className} onClick={() => setSelectedDay(key)} aria-label={`${formatDate(key)}${entry ? "، توجد متابعة يومية" : ""}`}>{day}{entry && <span className={`daily-dot mood-${entry.mood}`} aria-hidden="true" />}</button>; })}</div><div className="legend"><span><i />أيام الحيض</span><span><i className="fertile-dot" />الخصوبة المتوقعة</span><span><i className="daily-dot mood-good" />متابعة المزاج والأعراض</span><span><i className="today-dot" />اليوم</span></div><div className="day-detail"><strong>{formatDate(selectedDay)}</strong><br />{selection}</div></section>;
+}
 
 function ChatTab({ messages, input, setInput, onSubmit }: { messages: ChatMessage[]; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void }) { return <section className="surface-card page-card"><div className="section-header"><div><h2>مساعد زُهيرة</h2><p>إرشادات عامة تعمل دون اتصال</p></div><MessageCircle size={21} color="var(--accent)" /></div><div className="chat-disclaimer"><CircleHelp size={17} className="shrink-0 mt-0.5" />هذا المساعد ليس أداة طبية ولا يقدّم تشخيصاً أو علاجاً. عند ألم شديد، نزيف غير معتاد، أو قلق مستمر، تواصلي مع مختصة أو اطلبي الرعاية العاجلة.</div><div className="chat-log" aria-live="polite">{messages.map(message => <div key={message.id} className={`chat-bubble ${message.role === "user" ? "user" : ""}`}>{message.text}</div>)}</div><form className="chat-composer" onSubmit={onSubmit}><input value={input} onChange={event => setInput(event.target.value)} placeholder="اكتبي سؤالك هنا..." aria-label="سؤال للمساعد" /><button type="submit" aria-label="إرسال السؤال"><Send size={17} /></button></form></section>; }
 
 function SettingsTab({ name, setName, cycleLength, setCycleLength, profile, latestRecord, onSubmit, onTheme, onStealth, onEditLatest, onLogout, busy }: { name: string; setName: (value: string) => void; cycleLength: number; setCycleLength: (value: number) => void; profile: ProfileData; latestRecord: CycleRow | null; onSubmit: (event: FormEvent) => void; onTheme: (theme: ThemeName) => void; onStealth: () => void; onEditLatest: () => void; onLogout: () => void; busy: boolean }) { return <section className="surface-card page-card"><div><h2>الإعدادات والخصوصية</h2><p>عدّلي بيانات ملفكِ واختاري الشكل الذي يريحكِ.</p></div><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>الاسم المعروض</label><input value={name} onChange={event => setName(event.target.value)} /></div><div className="field"><label>متوسط طول الدورة</label><input type="number" min="20" max="45" value={cycleLength} onChange={event => setCycleLength(Number(event.target.value))} /></div><button className="secondary-button" type="submit" disabled={busy}><UserRound size={16} />حفظ الملف الشخصي</button></form><div className="settings-group"><h3>آخر حيض مسجل</h3><p>{latestRecord ? `بدأ في ${formatDate(latestRecord.startDate)}. يمكنكِ تعديل البداية أو إضافة تاريخ النهاية من هنا.` : "لا يوجد سجل حتى الآن. أضيفي أول يوم لبدء المتابعة."}</p><button className="secondary-button" type="button" onClick={onEditLatest}>{latestRecord ? <><Pencil size={16} />تعديل آخر حيض</> : <><Plus size={16} />إضافة آخر حيض</>}</button></div><div className="settings-group"><h3>ثيم التطبيق</h3><p>اختاري أحد الألوان التالية. يتم حفظ الاختيار في حسابكِ.</p><div className="theme-grid">{themes.map(theme => <button key={theme.value} className={`theme-button ${profile.theme === theme.value ? "selected" : ""}`} onClick={() => onTheme(theme.value)} disabled={busy}><i className={`theme-swatch ${theme.className}`} />{theme.label}</button>)}</div></div><div className="settings-group"><h3>وضع التخفي</h3><p>يعرض شاشة محايدة لا تحتوي على أي تفاصيل عن الدورة أو التطبيق.</p><div className="toggle-row"><div><strong>تفعيل وضع التخفي</strong><span>يمكنكِ العودة إلى التطبيق من الشاشة المحايدة.</span></div><button className="switch" type="button" aria-label="تفعيل وضع التخفي" onClick={onStealth} disabled={busy}><i /></button></div></div><div className="settings-group"><h3>الحساب</h3><p>بياناتكِ محفوظة بشكل منفصل عن باقي المستخدمين.</p><button className="secondary-button" type="button" onClick={onLogout}><LogOut size={16} />تسجيل الخروج</button></div></section>; }
 
 function Navigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) { const items: { id: Tab; label: string; icon: React.ReactNode }[] = [{ id: "home", label: "الرئيسية", icon: <HeartPulse size={18} /> }, { id: "records", label: "السجل", icon: <Droplets size={18} /> }, { id: "calendar", label: "التقويم", icon: <CalendarDays size={18} /> }, { id: "chat", label: "المساعد", icon: <MessageCircle size={18} /> }, { id: "settings", label: "الإعدادات", icon: <Settings size={18} /> }]; return <nav className="bottom-nav" aria-label="التنقل الرئيسي"><div className="bottom-nav-inner">{items.map(item => <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => onChange(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div></nav>; }
+
+function DailyEntryDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: DailyFormState; setForm: React.Dispatch<React.SetStateAction<DailyFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل متابعة اليوم" : "متابعة يومية"}</DialogTitle><DialogDescription>سجلي مزاجكِ والأعراض التي لاحظتها. هذا السجل خاص بحسابكِ.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>اليوم المختار</label><input type="date" value={form.entryDate} disabled /></div><div className="field"><label>كيف كان مزاجكِ؟</label><div className="mood-grid">{moodOptions.map(option => <button type="button" key={option.value} className={`mood-choice ${form.mood === option.value ? "selected" : ""}`} onClick={() => setForm(current => ({ ...current, mood: option.value }))}><span>{option.emoji}</span>{option.label}</button>)}</div></div><div className="field"><label>أعراض اليوم <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{dailySymptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظة خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ساعدني النوم المبكر اليوم" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ متابعة اليوم"}</button></form></DialogContent></Dialog>; }
 
 function RecordDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: RecordFormState; setForm: React.Dispatch<React.SetStateAction<RecordFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل سجل الدورة" : "تسجيل دورة جديدة"}</DialogTitle><DialogDescription>أضيفي تاريخ البداية، واتركي تاريخ النهاية فارغاً إذا كان الحيض مستمراً.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>أول يوم لنزول الدم</label><input type="date" max={dateKey(new Date())} value={form.startDate} onChange={event => setForm(current => ({ ...current, startDate: event.target.value }))} required /></div><div className="field"><label>آخر يوم للحيض <span className="font-normal">(اختياري)</span></label><input type="date" min={form.startDate} max={dateKey(new Date())} value={form.endDate} onChange={event => setForm(current => ({ ...current, endDate: event.target.value }))} /><span className="field-hint">{form.endDate ? "سيُعامل السجل كدورة مكتملة." : "سيظهر السجل كحيض مستمر ويمكن إغلاقه لاحقاً."}</span></div><div className="field"><label>أعراض مرافقة <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{symptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظات خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ألم أخف من المعتاد" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ السجل"}</button></form></DialogContent></Dialog>; }

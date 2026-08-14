@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -37,7 +37,21 @@ export const cycleRecords = mysqlTable("cycle_records", {
   index("cycle_records_user_start_idx").on(table.userId, table.startDate),
 ]);
 
+export const dailyEntries = mysqlTable("daily_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  entryDate: varchar("entry_date", { length: 10 }).notNull(),
+  mood: mysqlEnum("mood", ["very_low", "low", "neutral", "good", "great"]).notNull(),
+  symptomsJson: text("symptoms_json").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("daily_entries_user_date_unique").on(table.userId, table.entryDate),
+]);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type CycleRecord = typeof cycleRecords.$inferSelect;
+export type DailyEntry = typeof dailyEntries.$inferSelect;

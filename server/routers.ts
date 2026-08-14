@@ -2,9 +2,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   createCycleRecordForUser,
+  deleteDailyEntryForUser,
   deleteCycleRecordForUser,
   getProfileForUser,
+  listDailyEntriesForUser,
   listCycleRecordsForUser,
+  saveDailyEntryForUser,
   saveProfileForUser,
   updateCycleRecordForUser,
 } from "./db";
@@ -15,6 +18,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const theme = z.enum(["light", "dark", "pink", "purple"]);
+const mood = z.enum(["very_low", "low", "neutral", "good", "great"]);
 const cycleInput = z.object({
   startDate: dateKey,
   endDate: dateKey.nullable(),
@@ -25,6 +29,12 @@ const cycleInput = z.object({
     ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after start date." });
   }
 });
+const dailyEntryInput = z.object({
+  entryDate: dateKey,
+  mood,
+  symptoms: z.array(z.string().min(1).max(40)).max(10),
+  notes: z.string().max(1000).nullable(),
+});
 
 function databaseError(error: unknown): never {
   const message = error instanceof Error ? error.message : "UNKNOWN";
@@ -33,6 +43,9 @@ function databaseError(error: unknown): never {
   }
   if (message === "RECORD_NOT_FOUND") {
     throw new TRPCError({ code: "NOT_FOUND", message: "لم يتم العثور على هذا السجل." });
+  }
+  if (message === "DAILY_ENTRY_NOT_FOUND") {
+    throw new TRPCError({ code: "NOT_FOUND", message: "لم يتم العثور على متابعة هذا اليوم." });
   }
   throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذر حفظ البيانات الآن." });
 }
@@ -91,6 +104,33 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       try {
         await deleteCycleRecordForUser(ctx.user.id, input.id);
+        return { success: true };
+      } catch (error) {
+        return databaseError(error);
+      }
+    }),
+  }),
+  dailyEntries: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await listDailyEntriesForUser(ctx.user.id);
+      return entries.map(entry => ({
+        ...entry,
+        symptoms: (() => {
+          try { return JSON.parse(entry.symptomsJson) as string[]; } catch { return []; }
+        })(),
+      }));
+    }),
+    save: protectedProcedure.input(dailyEntryInput).mutation(async ({ ctx, input }) => {
+      try {
+        await saveDailyEntryForUser(ctx.user.id, input);
+        return { success: true };
+      } catch (error) {
+        return databaseError(error);
+      }
+    }),
+    delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      try {
+        await deleteDailyEntryForUser(ctx.user.id, input.id);
         return { success: true };
       } catch (error) {
         return databaseError(error);
