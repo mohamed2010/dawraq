@@ -23,5 +23,6 @@
 - [x] Save and push the daily tracking update to GitHub.
 - [x] Diagnose why Vercel serves the full-stack server bundle as plain text.
 - [x] Add a Vercel-compatible deployment entry point while documenting managed full-stack hosting as the safer alternative.
-- [ ] Correct Vite static output handling for Vercel and restore the browser manifest and offline shell files.
+- [x] Correct Vite static output handling for Vercel and restore the browser manifest and offline shell files.
 - [ ] Verify the corrected deployment path and push the deployment fix to GitHub.
+- [ ] Fix the deployed `/api/trpc` function route, which still returns Vercel 404 despite the static interface loading.
