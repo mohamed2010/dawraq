@@ -2,5 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm vercel-build",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "functions": {
+    "app.mjs": {
+      "runtime": "nodejs22.x",
+      "includeFiles": "public/**"
+    }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/app.mjs" },
+    { "src": "/(.*)", "dest": "/app.mjs" }
+  ]
 }

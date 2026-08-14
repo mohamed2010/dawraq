@@ -11,3 +11,4 @@ Because the current application requires OAuth callbacks, protected tRPC APIs, a
 1. [Vercel: Express on Vercel](https://vercel.com/docs/frameworks/backend/express)
 2. [Vercel: Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite)
 3. [Vercel: Build Output API primitives](https://vercel.com/docs/build-output-api/primitives)
+4. [Vercel: Project configuration with vercel.json](https://vercel.com/docs/project-configuration/vercel-json)
