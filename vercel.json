@@ -7,5 +7,9 @@
     "api/**/*.mjs": {
       "runtime": "nodejs22.x"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/trpc", "destination": "/api/trpc/[...trpc]" },
+    { "source": "/api/trpc/:path*", "destination": "/api/trpc/[...trpc]" }
+  ]
 }

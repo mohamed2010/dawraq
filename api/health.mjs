@@ -1,5 +1,3 @@
-export function GET() {
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+export default function healthHandler(_req, res) {
+  res.status(200).json({ ok: true });
 }
