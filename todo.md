@@ -21,3 +21,7 @@
 - [x] Add calendar day indicators, a daily log editor, and detailed mood/symptom summaries.
 - [x] Test daily-entry isolation and lifecycle rules, validate the migration and production build, and recheck the mobile layout shell.
 - [x] Save and push the daily tracking update to GitHub.
+- [x] Diagnose why Vercel serves the full-stack server bundle as plain text.
+- [x] Add a Vercel-compatible deployment entry point while documenting managed full-stack hosting as the safer alternative.
+- [ ] Correct Vite static output handling for Vercel and restore the browser manifest and offline shell files.
+- [ ] Verify the corrected deployment path and push the deployment fix to GitHub.
