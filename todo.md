@@ -120,3 +120,5 @@
 - [x] Add authenticated email-address change with current-password confirmation and uniqueness validation.
 - [x] Add a current-password-confirmed password-change flow that never exposes account secrets.
 - [ ] Add a safe logged-out password-reset email flow after configuring an approved transactional email provider and sending domain.
+- [x] Import validated historical cycle records from the approved Notion database into the approved target account, preserving ongoing periods and skipping duplicates.
+- [x] Read the approved public Notion view and verify the per1, start, and end field mapping before importing any records.
