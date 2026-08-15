@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "../client/src/components/ReferenceFeaturePanels";
-import { cycleInput, dailyEntryInput, profileInput } from "../lib/validation";
+import { appLockInput, cycleInput, dailyEntryInput, medicationInput, profileInput } from "../lib/validation";
 
 describe("Next.js API validation", () => {
   it("rejects an invalid cycle date range before it reaches the database", () => {
@@ -18,6 +18,13 @@ describe("Next.js API validation", () => {
   it("requires complete profile values for an authenticated update", () => {
     expect(profileInput.safeParse({ displayName: "سارة", averageCycleLength: 28, typicalBleedingDays: 5, relationshipStatus: "single", pregnancyStatus: "not_pregnant", theme: "pink", stealthMode: false, onboardingCompleted: true }).success).toBe(true);
     expect(profileInput.safeParse({ displayName: "", averageCycleLength: 28 }).success).toBe(false);
+  });
+
+  it("validates private medication schedules and numeric privacy-lock pins", () => {
+    expect(medicationInput.safeParse({ name: "دواء مسجل", dosage: "قرص واحد", notes: null, reminderTimes: ["18:00", "09:00", "09:00"], isActive: true }).success).toBe(true);
+    expect(medicationInput.safeParse({ name: "دواء", dosage: "قرص", notes: null, reminderTimes: ["25:00"], isActive: true }).success).toBe(false);
+    expect(appLockInput.safeParse({ pin: "1234" }).success).toBe(true);
+    expect(appLockInput.safeParse({ pin: "12ab" }).success).toBe(false);
   });
 
   it("renders the new health panels with the stored pain, preferences, and entries", () => {

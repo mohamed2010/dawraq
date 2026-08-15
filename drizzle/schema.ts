@@ -34,6 +34,7 @@ export const userProfiles = pgTable("user_profiles", {
   theme: appTheme("theme").notNull().default("pink"),
   stealthMode: boolean("stealth_mode").notNull().default(false),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  appLockHash: text("app_lock_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -61,8 +62,34 @@ export const dailyEntries = pgTable("daily_entries", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, table => [uniqueIndex("daily_entries_user_date_unique").on(table.userId, table.entryDate)]);
 
+export const medications = pgTable("medications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 120 }).notNull(),
+  dosage: varchar("dosage", { length: 160 }).notNull(),
+  notes: text("notes"),
+  reminderTimesJson: text("reminder_times_json").notNull().default("[]"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("medications_user_active_idx").on(table.userId, table.isActive)]);
+
+export const medicationDoseLogs = pgTable("medication_dose_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  medicationId: integer("medication_id").notNull().references(() => medications.id, { onDelete: "cascade" }),
+  doseDate: varchar("dose_date", { length: 10 }).notNull(),
+  scheduledTime: varchar("scheduled_time", { length: 5 }).notNull(),
+  takenAt: timestamp("taken_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("medication_dose_logs_unique").on(table.userId, table.medicationId, table.doseDate, table.scheduledTime),
+  index("medication_dose_logs_user_date_idx").on(table.userId, table.doseDate),
+]);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type CycleRecord = typeof cycleRecords.$inferSelect;
 export type DailyEntry = typeof dailyEntries.$inferSelect;
+export type Medication = typeof medications.$inferSelect;
+export type MedicationDoseLog = typeof medicationDoseLogs.$inferSelect;

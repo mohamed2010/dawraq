@@ -8,6 +8,9 @@ const knownMessages: Record<string, { status: number; message: string }> = {
   ONGOING_PERIOD_EXISTS: { status: 409, message: "يوجد حيض مستمر بالفعل. أضيفي تاريخ النهاية أولاً أو عدّلي السجل الحالي." },
   RECORD_NOT_FOUND: { status: 404, message: "لم يتم العثور على هذا السجل." },
   DAILY_ENTRY_NOT_FOUND: { status: 404, message: "لم يتم العثور على متابعة هذا اليوم." },
+  MEDICATION_NOT_FOUND: { status: 404, message: "لم يتم العثور على هذا الدواء في ملفكِ." },
+  APP_LOCK_NOT_SET: { status: 409, message: "لم يتم إعداد رمز قفل للتطبيق بعد." },
+  INVALID_APP_LOCK_PIN: { status: 401, message: "رمز قفل التطبيق غير صحيح." },
 };
 
 export function routeError(error: unknown) {

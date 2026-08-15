@@ -4,13 +4,16 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, ApiError, useApiCache } from "@/lib/api";
+import { BrowserMedicationReminderController, MedicationPanel } from "@/components/MedicationTools";
+import { AppLockScreen, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
+import { WellnessTrends } from "@/components/WellnessTrends";
 import { addCalendarDays, calculateCycleStatistics, dateKey, daysInRange, type CycleRecordForStats } from "@shared/cycleMath";
-import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, CloudOff, Droplets, EyeOff, Flower2, HeartPulse, LogIn, LogOut, MessageCircle, Moon, Pencil, Plus, Send, Settings, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, CloudOff, Droplets, EyeOff, Flower2, HeartPulse, LogIn, LogOut, MessageCircle, Moon, Pencil, Pill, Plus, Send, Settings, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type Tab = "home" | "records" | "calendar" | "chat" | "settings";
+type Tab = "home" | "records" | "calendar" | "medications" | "chat" | "settings";
 type ThemeName = "light" | "dark" | "pink" | "purple";
 type CycleRow = CycleRecordForStats & { symptoms: string[]; notes: string | null };
 type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; notes: string };
@@ -68,12 +71,15 @@ export default function Home() {
   const profileQuery = api.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const cyclesQuery = api.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
   const dailyEntriesQuery = api.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
+  const medicationsQuery = api.medications.list.useQuery(undefined, { enabled: isAuthenticated });
+  const appLockQuery = api.privacyLock.status.useQuery(undefined, { enabled: isAuthenticated });
   const saveProfile = api.profile.save.useMutation();
   const createCycle = api.cycles.create.useMutation();
   const updateCycle = api.cycles.update.useMutation();
   const deleteCycle = api.cycles.delete.useMutation();
   const saveDailyEntry = api.dailyEntries.save.useMutation();
   const deleteDailyEntry = api.dailyEntries.delete.useMutation();
+  const takeMedicationDose = api.medications.takeDose.useMutation();
   const [tab, setTab] = useState<Tab>("home");
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordForm, setRecordForm] = useState<RecordFormState>(emptyRecordForm);
@@ -97,10 +103,12 @@ export default function Home() {
   const [onboardingEndDate, setOnboardingEndDate] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{ id: 1, role: "assistant", text: "أهلاً بكِ. اسأليني عن متابعة الدورة أو الأعراض أو الخصوبة، وسأقدم إرشادات عامة تعمل دون اتصال." }]);
+  const [privacyLocked, setPrivacyLocked] = useState(false);
 
   const profile = profileQuery.data;
   const cycles = (cyclesQuery.data ?? []) as CycleRow[];
   const dailyEntries = (dailyEntriesQuery.data ?? []) as DailyEntryRow[];
+  const medications = medicationsQuery.data ?? [];
   const today = dateKey(new Date());
   const statistics = useMemo(() => calculateCycleStatistics(cycles, profile?.averageCycleLength ?? 28, today), [cycles, profile?.averageCycleLength, today]);
   const isBusy = saveProfile.isPending || createCycle.isPending || updateCycle.isPending || deleteCycle.isPending || saveDailyEntry.isPending || deleteDailyEntry.isPending;
@@ -119,8 +127,21 @@ export default function Home() {
   }, [profile?.theme]);
 
   const refreshData = async () => {
-    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch()]);
+    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch(), medicationsQuery.refetch(), appLockQuery.refetch()]);
   };
+  const confirmReminderDose = useCallback(async (id: number, scheduledTime: string) => {
+    await takeMedicationDose.mutateAsync({ id, doseDate: dateKey(new Date()), scheduledTime });
+    toast.success("تم تسجيل الجرعة لهذا الوقت.");
+  }, [takeMedicationDose]);
+
+  useEffect(() => {
+    if (!appLockQuery.data?.enabled || typeof window === "undefined") return;
+    const lock = () => setPrivacyLocked(true);
+    const onVisibility = () => { if (document.visibilityState === "hidden") lock(); };
+    window.addEventListener("blur", lock);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { window.removeEventListener("blur", lock); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [appLockQuery.data?.enabled]);
 
   const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
@@ -241,13 +262,14 @@ export default function Home() {
     setChatInput("");
   };
 
-  if (isAuthenticated && (loading || profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading)) {
+  if (isAuthenticated && (loading || profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading || medicationsQuery.isLoading || appLockQuery.isLoading)) {
     return <div className="tracker-app loading-screen"><Activity className="animate-pulse" size={30} /></div>;
   }
   if (!isAuthenticated) return <LoginPage />;
-  if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
+  if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError || medicationsQuery.isError || appLockQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
   if (!profile?.onboardingCompleted) return <OnboardingPage onSubmit={finishOnboarding} name={onboardingName} setName={setOnboardingName} cycleLength={onboardingCycleLength} setCycleLength={setOnboardingCycleLength} lastPeriod={onboardingLastPeriod} setLastPeriod={setOnboardingLastPeriod} endDate={onboardingEndDate} setEndDate={setOnboardingEndDate} busy={isBusy} />;
   if (profile.stealthMode) return <StealthPage onReturn={() => saveCurrentProfile({ stealthMode: false })} busy={isBusy} />;
+  if (privacyLocked && appLockQuery.data?.enabled) return <AppLockScreen onUnlock={() => setPrivacyLocked(false)} />;
 
   const ongoingRecord = cycles.find(record => !record.endDate) ?? null;
   const periodDays = new Set(cycles.flatMap(record => daysInRange(record.startDate, record.endDate ?? today)));
@@ -262,10 +284,12 @@ export default function Home() {
         </header>
         {tab === "home" && <HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} />}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
-        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /></>}
+        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
+        {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /></>}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} /></>}
       </div>
+      <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />
       <Navigation active={tab} onChange={setTab} />
       <RecordDialog open={recordOpen} onOpenChange={setRecordOpen} form={recordForm} setForm={setRecordForm} onToggleSymptom={toggleSymptom} onSubmit={saveRecord} busy={isBusy} />
       <DailyEntryDialog open={dailyOpen} onOpenChange={setDailyOpen} form={dailyForm} setForm={setDailyForm} onToggleSymptom={toggleDailySymptom} onSubmit={saveDaily} busy={isBusy} />
@@ -340,7 +364,7 @@ function ChatTab({ messages, input, setInput, onSubmit }: { messages: ChatMessag
 
 function SettingsTab({ name, setName, cycleLength, setCycleLength, profile, latestRecord, onSubmit, onTheme, onStealth, onEditLatest, onLogout, busy }: { name: string; setName: (value: string) => void; cycleLength: number; setCycleLength: (value: number) => void; profile: ProfileData; latestRecord: CycleRow | null; onSubmit: (event: FormEvent) => void; onTheme: (theme: ThemeName) => void; onStealth: () => void; onEditLatest: () => void; onLogout: () => void; busy: boolean }) { return <section className="surface-card page-card"><div><h2>الإعدادات والخصوصية</h2><p>عدّلي بيانات ملفكِ واختاري الشكل الذي يريحكِ.</p></div><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>الاسم المعروض</label><input value={name} onChange={event => setName(event.target.value)} /></div><div className="field"><label>متوسط طول الدورة</label><input type="number" min="20" max="45" value={cycleLength} onChange={event => setCycleLength(Number(event.target.value))} /></div><button className="secondary-button" type="submit" disabled={busy}><UserRound size={16} />حفظ الملف الشخصي</button></form><div className="settings-group"><h3>آخر حيض مسجل</h3><p>{latestRecord ? `بدأ في ${formatDate(latestRecord.startDate)}. يمكنكِ تعديل البداية أو إضافة تاريخ النهاية من هنا.` : "لا يوجد سجل حتى الآن. أضيفي أول يوم لبدء المتابعة."}</p><button className="secondary-button" type="button" onClick={onEditLatest}>{latestRecord ? <><Pencil size={16} />تعديل آخر حيض</> : <><Plus size={16} />إضافة آخر حيض</>}</button></div><div className="settings-group"><h3>ثيم التطبيق</h3><p>اختاري أحد الألوان التالية. يتم حفظ الاختيار في حسابكِ.</p><div className="theme-grid">{themes.map(theme => <button key={theme.value} className={`theme-button ${profile.theme === theme.value ? "selected" : ""}`} onClick={() => onTheme(theme.value)} disabled={busy}><i className={`theme-swatch ${theme.className}`} />{theme.label}</button>)}</div></div><div className="settings-group"><h3>وضع التخفي</h3><p>يعرض شاشة محايدة لا تحتوي على أي تفاصيل عن الدورة أو التطبيق.</p><div className="toggle-row"><div><strong>تفعيل وضع التخفي</strong><span>يمكنكِ العودة إلى التطبيق من الشاشة المحايدة.</span></div><button className="switch" type="button" aria-label="تفعيل وضع التخفي" onClick={onStealth} disabled={busy}><i /></button></div></div><div className="settings-group"><h3>الحساب</h3><p>بياناتكِ محفوظة بشكل منفصل عن باقي المستخدمين.</p><button className="secondary-button" type="button" onClick={onLogout}><LogOut size={16} />تسجيل الخروج</button></div></section>; }
 
-function Navigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) { const items: { id: Tab; label: string; icon: React.ReactNode }[] = [{ id: "home", label: "الرئيسية", icon: <HeartPulse size={18} /> }, { id: "records", label: "السجل", icon: <Droplets size={18} /> }, { id: "calendar", label: "التقويم", icon: <CalendarDays size={18} /> }, { id: "chat", label: "المساعد", icon: <MessageCircle size={18} /> }, { id: "settings", label: "الإعدادات", icon: <Settings size={18} /> }]; return <nav className="bottom-nav" aria-label="التنقل الرئيسي"><div className="bottom-nav-inner">{items.map(item => <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => onChange(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div></nav>; }
+function Navigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) { const items: { id: Tab; label: string; icon: React.ReactNode }[] = [{ id: "home", label: "الرئيسية", icon: <HeartPulse size={18} /> }, { id: "records", label: "السجل", icon: <Droplets size={18} /> }, { id: "calendar", label: "التقويم", icon: <CalendarDays size={18} /> }, { id: "medications", label: "الأدوية", icon: <Pill size={18} /> }, { id: "chat", label: "المساعد", icon: <MessageCircle size={18} /> }, { id: "settings", label: "الإعدادات", icon: <Settings size={18} /> }]; return <nav className="bottom-nav" aria-label="التنقل الرئيسي"><div className="bottom-nav-inner">{items.map(item => <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => onChange(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div></nav>; }
 
 function DailyEntryDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: DailyFormState; setForm: React.Dispatch<React.SetStateAction<DailyFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل متابعة اليوم" : "متابعة يومية"}</DialogTitle><DialogDescription>سجلي مزاجكِ والأعراض التي لاحظتها. هذا السجل خاص بحسابكِ.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>اليوم المختار</label><input type="date" value={form.entryDate} disabled /></div><div className="field"><label>كيف كان مزاجكِ؟</label><div className="mood-grid">{moodOptions.map(option => <button type="button" key={option.value} className={`mood-choice ${form.mood === option.value ? "selected" : ""}`} onClick={() => setForm(current => ({ ...current, mood: option.value }))}><span>{option.emoji}</span>{option.label}</button>)}</div></div><div className="field"><label>أعراض اليوم <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{dailySymptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظة خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ساعدني النوم المبكر اليوم" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ متابعة اليوم"}</button></form></DialogContent></Dialog>; }
 

@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { cycleRecords, dailyEntries, InsertUser, userProfiles, users } from "../drizzle/schema";
+import { cycleRecords, dailyEntries, InsertUser, medicationDoseLogs, medications, userProfiles, users } from "../drizzle/schema";
 
 let pool: Pool | null = null;
 let database: ReturnType<typeof drizzle> | null = null;
@@ -140,4 +140,83 @@ export async function deleteDailyEntryForUser(userId: number, id: number) {
   if (!db) throw new Error("Database unavailable");
   const deleted = await db.delete(dailyEntries).where(and(eq(dailyEntries.id, id), eq(dailyEntries.userId, userId))).returning({ id: dailyEntries.id });
   if (!deleted.length) throw new Error("DAILY_ENTRY_NOT_FOUND");
+}
+
+export type MedicationInput = { name: string; dosage: string; notes: string | null; reminderTimes: string[]; isActive: boolean };
+
+export async function listMedicationsForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select().from(medications).where(eq(medications.userId, userId)).orderBy(desc(medications.isActive), desc(medications.updatedAt), desc(medications.id));
+}
+
+export async function createMedicationForUser(userId: number, input: MedicationInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [created] = await db.insert(medications).values({
+    userId,
+    name: input.name,
+    dosage: input.dosage,
+    notes: input.notes,
+    reminderTimesJson: JSON.stringify(input.reminderTimes),
+    isActive: input.isActive,
+  }).returning({ id: medications.id });
+  return created.id;
+}
+
+export async function updateMedicationForUser(userId: number, id: number, input: MedicationInput) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const updated = await db.update(medications).set({
+    name: input.name,
+    dosage: input.dosage,
+    notes: input.notes,
+    reminderTimesJson: JSON.stringify(input.reminderTimes),
+    isActive: input.isActive,
+    updatedAt: new Date(),
+  }).where(and(eq(medications.id, id), eq(medications.userId, userId))).returning({ id: medications.id });
+  if (!updated.length) throw new Error("MEDICATION_NOT_FOUND");
+}
+
+export async function deleteMedicationForUser(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const deleted = await db.delete(medications).where(and(eq(medications.id, id), eq(medications.userId, userId))).returning({ id: medications.id });
+  if (!deleted.length) throw new Error("MEDICATION_NOT_FOUND");
+}
+
+export async function recordMedicationDoseForUser(userId: number, medicationId: number, doseDate: string, scheduledTime: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const ownedMedication = await db.select({ id: medications.id }).from(medications).where(and(eq(medications.id, medicationId), eq(medications.userId, userId))).limit(1);
+  if (!ownedMedication.length) throw new Error("MEDICATION_NOT_FOUND");
+  await db.insert(medicationDoseLogs).values({ userId, medicationId, doseDate, scheduledTime }).onConflictDoNothing({ target: [medicationDoseLogs.userId, medicationDoseLogs.medicationId, medicationDoseLogs.doseDate, medicationDoseLogs.scheduledTime] });
+}
+
+export async function getAppLockHashForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return (await db.select({ appLockHash: userProfiles.appLockHash }).from(userProfiles).where(eq(userProfiles.userId, userId)).limit(1))[0]?.appLockHash ?? null;
+}
+
+export async function saveAppLockHashForUser(userId: number, appLockHash: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const updated = await db.update(userProfiles).set({ appLockHash, updatedAt: new Date() }).where(eq(userProfiles.userId, userId)).returning({ id: userProfiles.id });
+  if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+}
+
+export async function getPersonalHealthSummaryForUser(userId: number) {
+  const [profile, cycles, dailyEntriesForUser, medicationsForUser, doseLogs] = await Promise.all([
+    getProfileForUser(userId),
+    listCycleRecordsForUser(userId),
+    listDailyEntriesForUser(userId),
+    listMedicationsForUser(userId),
+    (async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
+      return db.select().from(medicationDoseLogs).where(eq(medicationDoseLogs.userId, userId)).orderBy(desc(medicationDoseLogs.takenAt)).limit(60);
+    })(),
+  ]);
+  return { profile, cycles, dailyEntries: dailyEntriesForUser, medications: medicationsForUser, medicationDoseLogs: doseLogs };
 }

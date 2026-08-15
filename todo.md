@@ -67,11 +67,18 @@
 - [x] Define and document the transition path from legacy Manus identities to local email accounts.
 - [x] Add secure local registration, login, logout, and signed server-session routes without calling Manus services.
 - [x] Replace the OAuth landing and login actions with Arabic email-and-password account screens.
-- [ ] Remove Manus OAuth runtime dependencies, routes, and production configuration after the replacement is verified.
+- [x] Remove Manus OAuth runtime dependencies, routes, and production configuration after the replacement is verified.
 - [x] Add security and isolation tests for local credentials, sessions, and account-scoped tracker data.
 - [x] Add local registration/login/logout integration coverage for the signed cookie session contract.
 - [x] Add local-account integration coverage proving one authenticated account cannot access another account's profile, cycles, or daily entries.
 - [x] Add negative local-session mutation tests proving one account cannot update or delete another account's cycle or daily-entry records.
 - [x] Validate cross-account mutation denial with two real local production accounts before final acceptance.
 - [x] Validate with two real local production accounts that one account cannot delete another account's daily entry.
-- [ ] Deploy and validate independent authentication with a newly registered production account.
+- [x] Deploy and validate independent authentication with a newly registered production account.
+- [x] Add private medication records with dosage notes, configurable times, and per-user access controls.
+- [x] Add in-browser medication reminders with an explicit reliability and non-diagnostic safety notice.
+- [x] Add an in-app privacy lock with a hashed numeric PIN and an explicit device-lock limitation notice.
+- [x] Add private trend views for mood, symptoms, and pain based only on recorded entries.
+- [x] Add user-controlled generation of a concise printable personal health summary.
+- [x] Add validation and account-isolation tests for medication schedules, reminder-state updates, and privacy-lock input.
+- [ ] Deploy and production-validate the medication, reminder, privacy, trend, and report features.
