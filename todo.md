@@ -124,3 +124,4 @@
 - [x] Read the approved public Notion view and verify the per1, start, and end field mapping before importing any records.
 - [x] Redesign cycle edit/delete actions and the cycle editor modal to remove translucent controls and prevent an intrusive internal scrollbar on mobile.
 - [x] Reorganize the oversized settings page into compact mobile-friendly sections without removing any existing settings or privacy tools.
+- [x] Fix the bottom navigation on desktop and mobile with an opaque surface and safe content spacing so it never overlaps page content.

@@ -22,4 +22,11 @@ describe("settings workspace and cycle dialog layout", () => {
     expect(styleSource).toContain(".cycle-dialog-scroll");
     expect(styleSource).toContain(".mini-action.edit-action");
   });
+
+  it("keeps the bottom navigation fixed, opaque, and clear of the page content", () => {
+    expect(styleSource).toContain(".bottom-nav { position:fixed");
+    expect(styleSource).toContain("background:var(--surface)");
+    expect(styleSource).toContain(".app-shell { width: min(100%, 980px); margin: 0 auto; padding:14px 14px calc(124px + env(safe-area-inset-bottom)); }");
+    expect(styleSource).not.toContain("position:sticky; top:12px");
+  });
 });
