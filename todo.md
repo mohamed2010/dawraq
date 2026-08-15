@@ -100,16 +100,16 @@
 - [x] Add configurable in-browser reminders for predicted period, cycle/entry logging, and period-product preparation.
 - [x] Add selectable-period reports with cycle, symptom, mood, temperature, weight, medication, and fertility summaries ready for printing or PDF saving.
 - [x] Add a user-controlled full-account data export and permanent data-deletion flow with explicit confirmation.
-- [ ] Design future-only phases for pregnancy, postpartum, perimenopause, device health integrations, and temporary clinician sharing.
+- [x] Design future-only phases for pregnancy, postpartum, perimenopause, device health integrations, and temporary clinician sharing.
 - [x] Add configurable in-browser reminders for predicted periods, entry logging, and period-product preparation without server-side scheduling.
 - [x] Add selectable date-range reports with cycle, fertility, symptom, mood, medication, temperature, and weight summaries for printing or PDF saving.
 - [x] Add user-controlled large-text and high-contrast accessibility preferences scoped to the signed-in account on the current device.
 - [x] Add medication-adherence summaries based on confirmed taken doses.
 - [x] Add an encrypted portable backup export and file-validation workflow with client-side encryption.
 - [x] Add a server-side backup restore workflow with explicit overwrite safeguards, confirmation, and ownership checks.
-- [ ] Add device-screen lock support using WebAuthn where the browser/device supports it, with a PIN fallback.
+- [x] Add device-screen lock support using WebAuthn where the browser/device supports it, with a PIN fallback.
 - [x] Add configurable local tracking modes for pregnancy, postpartum, and perimenopause without medical diagnosis.
-- [ ] Add a time-limited, user-revocable clinician-sharing report flow that never exposes the full account by default.
+- [x] Add a time-limited, user-revocable clinician-sharing report flow that never exposes the full account by default.
 - [x] Research and document the credential and consent requirements for optional Apple Health, Google Health Connect, and wearable integrations.
 - [x] Add an Arabic-first and English-compatible responsive typography scale with improved line height and numeral readability.
 - [x] Increase mobile touch-target sizing, field legibility, and action hierarchy without reducing information density.

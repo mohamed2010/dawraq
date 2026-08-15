@@ -29,3 +29,5 @@ export const backupRestoreInput = z.object({
     medications: z.array(medicationInput).max(100),
   }).strict(),
 });
+export const clinicianShareCreateInput = z.object({ expiresInHours: z.union([z.literal(24), z.literal(72)]) });
+export const webauthnResponseInput = z.object({ response: z.unknown() });

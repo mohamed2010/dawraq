@@ -1,8 +1,8 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { cycleRecords, dailyEntries, InsertUser, medicationDoseLogs, medications, userProfiles, users } from "../drizzle/schema";
+import { clinicianShareReports, cycleRecords, dailyEntries, devicePasskeys, InsertUser, medicationDoseLogs, medications, userProfiles, users, webauthnChallenges } from "../drizzle/schema";
 
 let pool: Pool | null = null;
 let database: ReturnType<typeof drizzle> | null = null;
@@ -213,6 +213,67 @@ export async function saveAppLockHashForUser(userId: number, appLockHash: string
   if (!updated.length) throw new Error("RECORD_NOT_FOUND");
 }
 
+export async function getDevicePasskeyStatusForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const passkeys = await db.select({ id: devicePasskeys.id }).from(devicePasskeys).where(eq(devicePasskeys.userId, userId));
+  return { enabled: passkeys.length > 0, credentialCount: passkeys.length };
+}
+
+export async function listDevicePasskeysForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select().from(devicePasskeys).where(eq(devicePasskeys.userId, userId)).orderBy(desc(devicePasskeys.createdAt));
+}
+
+export async function saveWebAuthnChallengeForUser(userId: number, ceremony: "registration" | "authentication", challenge: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  await db.insert(webauthnChallenges).values({ userId, ceremony, challenge, expiresAt, updatedAt: new Date() }).onConflictDoUpdate({ target: webauthnChallenges.userId, set: { ceremony, challenge, expiresAt, updatedAt: new Date() } });
+}
+
+export async function getValidWebAuthnChallengeForUser(userId: number, ceremony: "registration" | "authentication") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const result = await db.select().from(webauthnChallenges).where(eq(webauthnChallenges.userId, userId)).limit(1);
+  const challenge = result[0];
+  if (!challenge || challenge.ceremony !== ceremony || challenge.expiresAt.getTime() <= Date.now()) throw new Error("WEBAUTHN_CHALLENGE_EXPIRED");
+  return challenge.challenge;
+}
+
+export async function clearWebAuthnChallengeForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, userId));
+}
+
+export async function saveDevicePasskeyForUser(userId: number, credential: { id: string; publicKey: string; counter: number; transports: string[] }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(devicePasskeys).values({ userId, credentialId: credential.id, publicKey: credential.publicKey, counter: credential.counter, transportsJson: JSON.stringify(credential.transports) });
+}
+
+export async function getDevicePasskeyForUser(userId: number, credentialId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const result = await db.select().from(devicePasskeys).where(and(eq(devicePasskeys.userId, userId), eq(devicePasskeys.credentialId, credentialId))).limit(1);
+  return result[0] ?? null;
+}
+
+export async function recordDevicePasskeyUseForUser(userId: number, credentialId: string, counter: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const updated = await db.update(devicePasskeys).set({ counter, lastUsedAt: new Date() }).where(and(eq(devicePasskeys.userId, userId), eq(devicePasskeys.credentialId, credentialId))).returning({ id: devicePasskeys.id });
+  if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+}
+
+export async function deleteDevicePasskeysForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(devicePasskeys).where(eq(devicePasskeys.userId, userId));
+}
+
 export async function getPersonalHealthSummaryForUser(userId: number) {
   const [profile, cycles, dailyEntriesForUser, medicationsForUser, doseLogs] = await Promise.all([
     getProfileForUser(userId),
@@ -226,6 +287,74 @@ export async function getPersonalHealthSummaryForUser(userId: number) {
     })(),
   ]);
   return { profile, cycles, dailyEntries: dailyEntriesForUser, medications: medicationsForUser, medicationDoseLogs: doseLogs };
+}
+
+export type ClinicianSharePayload = {
+  title: string;
+  generatedAt: string;
+  profile: { displayName: string; averageCycleLength: number; typicalBleedingDays: number; tryingToConceive: boolean } | null;
+  cycleSummary: { recordedCycles: number; latestStartDate: string | null; ongoingCycles: number };
+  wellbeingSummary: { recordedDays: number; averagePainLevel: number | null; mostCommonSymptoms: string[] };
+  medicationSummary: { activeMedicationCount: number; confirmedDoses: number };
+  notice: string;
+};
+
+function parseStoredStringArray(value: string) {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch { return []; }
+}
+
+function sha256(value: string) { return createHash("sha256").update(value).digest("hex"); }
+
+function createClinicianPayload(summary: Awaited<ReturnType<typeof getPersonalHealthSummaryForUser>>): ClinicianSharePayload {
+  const symptomCounts = new Map<string, number>();
+  for (const entry of summary.dailyEntries) {
+    for (const symptom of [...parseStoredStringArray(entry.symptomsJson), ...parseStoredStringArray(entry.customSymptomsJson)]) symptomCounts.set(symptom, (symptomCounts.get(symptom) ?? 0) + 1);
+  }
+  const averagePainLevel = summary.dailyEntries.length ? Math.round((summary.dailyEntries.reduce((total, entry) => total + entry.painLevel, 0) / summary.dailyEntries.length) * 10) / 10 : null;
+  return {
+    title: "ملخص متابعة محدود من زُهيرة",
+    generatedAt: new Date().toISOString(),
+    profile: summary.profile ? { displayName: summary.profile.displayName, averageCycleLength: summary.profile.averageCycleLength, typicalBleedingDays: summary.profile.typicalBleedingDays, tryingToConceive: summary.profile.tryingToConceive } : null,
+    cycleSummary: { recordedCycles: summary.cycles.length, latestStartDate: summary.cycles[0]?.startDate ?? null, ongoingCycles: summary.cycles.filter(cycle => !cycle.endDate).length },
+    wellbeingSummary: { recordedDays: summary.dailyEntries.length, averagePainLevel, mostCommonSymptoms: [...symptomCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([symptom]) => symptom) },
+    medicationSummary: { activeMedicationCount: summary.medications.filter(medication => medication.isActive).length, confirmedDoses: summary.medicationDoseLogs.length },
+    notice: "هذا ملخص محدود أنشأته صاحبة الحساب لمشاركته اختيارياً، وليس تشخيصاً أو وصفة علاجية. لا يتيح الرابط الوصول إلى الحساب أو السجل الكامل.",
+  };
+}
+
+export async function createClinicianShareForUser(userId: number, expiresInHours: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+  const report = createClinicianPayload(await getPersonalHealthSummaryForUser(userId));
+  const inserted = await db.insert(clinicianShareReports).values({ userId, tokenHash: sha256(token), reportJson: JSON.stringify(report), expiresAt }).returning({ id: clinicianShareReports.id, expiresAt: clinicianShareReports.expiresAt });
+  return { id: inserted[0]!.id, token, expiresAt: inserted[0]!.expiresAt, report };
+}
+
+export async function listClinicianSharesForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select({ id: clinicianShareReports.id, expiresAt: clinicianShareReports.expiresAt, revokedAt: clinicianShareReports.revokedAt, createdAt: clinicianShareReports.createdAt }).from(clinicianShareReports).where(eq(clinicianShareReports.userId, userId)).orderBy(desc(clinicianShareReports.createdAt));
+}
+
+export async function revokeClinicianShareForUser(userId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const updated = await db.update(clinicianShareReports).set({ revokedAt: new Date() }).where(and(eq(clinicianShareReports.userId, userId), eq(clinicianShareReports.id, id), isNull(clinicianShareReports.revokedAt))).returning({ id: clinicianShareReports.id });
+  if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+}
+
+export async function getActiveClinicianShareByToken(token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const result = await db.select({ reportJson: clinicianShareReports.reportJson, expiresAt: clinicianShareReports.expiresAt, revokedAt: clinicianShareReports.revokedAt }).from(clinicianShareReports).where(eq(clinicianShareReports.tokenHash, sha256(token))).limit(1);
+  const share = result[0];
+  if (!share || share.revokedAt || share.expiresAt.getTime() <= Date.now()) return null;
+  try { return { report: JSON.parse(share.reportJson) as ClinicianSharePayload, expiresAt: share.expiresAt }; } catch { throw new Error("INVALID_SHARE_REPORT"); }
 }
 
 export async function restoreBackupForUser(userId: number, backup: { profile: { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: "single" | "married"; pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure"; theme: "light" | "dark" | "pink" | "purple"; language: "ar" | "en"; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean } | null; cycles: Array<{ startDate: string; endDate: string | null; symptoms: string[]; flowVolume: "light" | "medium" | "heavy"; notes: string | null }>; dailyEntries: Array<{ entryDate: string; mood: "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious"; painLevel: number; symptoms: string[]; customSymptoms: string[]; energyLevel: number; weightKg: number | null; basalTemperature: number | null; cervicalMucus: "not_observed" | "dry" | "sticky" | "creamy" | "watery" | "egg_white"; opkResult: "not_taken" | "negative" | "positive" | "unclear"; pregnancyTest: "not_taken" | "negative" | "positive" | "unclear"; notes: string | null }>; medications: MedicationInput[] }) {

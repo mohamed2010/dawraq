@@ -8,7 +8,7 @@ import { BrowserMedicationReminderController, MedicationPanel } from "@/componen
 import { CycleGuidancePanel } from "@/components/CycleGuidancePanel";
 import { HealthPatternAlerts } from "@/components/HealthPatternAlerts";
 import { LanguageController, type AppLanguage } from "@/components/LanguageController";
-import { AppLockScreen, PrivacyToolsPanel } from "@/components/PrivacyTools";
+import { AppLockScreen, ClinicianSharingPanel, DeviceLockPanel, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { WellnessTrends } from "@/components/WellnessTrends";
 import { AccessibilityPanel, GeneralReminderPanel, LifeStagePanel, ReportsAndBackupPanel } from "@/components/EnhancementTools";
@@ -80,6 +80,7 @@ export default function Home() {
   const dailyEntriesQuery = api.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
   const medicationsQuery = api.medications.list.useQuery(undefined, { enabled: isAuthenticated });
   const appLockQuery = api.privacyLock.status.useQuery(undefined, { enabled: isAuthenticated });
+  const deviceLockQuery = api.deviceLock.status.useQuery(undefined, { enabled: isAuthenticated });
   const saveProfile = api.profile.save.useMutation();
   const createCycle = api.cycles.create.useMutation();
   const updateCycle = api.cycles.update.useMutation();
@@ -136,7 +137,7 @@ export default function Home() {
   }, [profile?.theme]);
 
   const refreshData = async () => {
-    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch(), medicationsQuery.refetch(), appLockQuery.refetch()]);
+    await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch(), medicationsQuery.refetch(), appLockQuery.refetch(), deviceLockQuery.refetch()]);
   };
   const confirmReminderDose = useCallback(async (id: number, scheduledTime: string) => {
     await takeMedicationDose.mutateAsync({ id, doseDate: dateKey(new Date()), scheduledTime });
@@ -144,13 +145,13 @@ export default function Home() {
   }, [takeMedicationDose]);
 
   useEffect(() => {
-    if (!appLockQuery.data?.enabled || typeof window === "undefined") return;
+    if ((!appLockQuery.data?.enabled && !deviceLockQuery.data?.enabled) || typeof window === "undefined") return;
     const lock = () => setPrivacyLocked(true);
     const onVisibility = () => { if (document.visibilityState === "hidden") lock(); };
     window.addEventListener("blur", lock);
     document.addEventListener("visibilitychange", onVisibility);
     return () => { window.removeEventListener("blur", lock); document.removeEventListener("visibilitychange", onVisibility); };
-  }, [appLockQuery.data?.enabled]);
+  }, [appLockQuery.data?.enabled, deviceLockQuery.data?.enabled]);
 
   const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
@@ -281,7 +282,7 @@ export default function Home() {
   if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError || medicationsQuery.isError || appLockQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
   if (!profile?.onboardingCompleted) return <OnboardingPage onSubmit={finishOnboarding} name={onboardingName} setName={setOnboardingName} cycleLength={onboardingCycleLength} setCycleLength={setOnboardingCycleLength} lastPeriod={onboardingLastPeriod} setLastPeriod={setOnboardingLastPeriod} endDate={onboardingEndDate} setEndDate={setOnboardingEndDate} busy={isBusy} />;
   if (profile.stealthMode) return <StealthPage onReturn={() => saveCurrentProfile({ stealthMode: false })} busy={isBusy} />;
-  if (privacyLocked && appLockQuery.data?.enabled) return <AppLockScreen onUnlock={() => setPrivacyLocked(false)} />;
+  if (privacyLocked && (appLockQuery.data?.enabled || deviceLockQuery.data?.enabled)) return <AppLockScreen onUnlock={() => setPrivacyLocked(false)} pinEnabled={Boolean(appLockQuery.data?.enabled)} />;
 
   const ongoingRecord = cycles.find(record => !record.endDate) ?? null;
   const periodDays = new Set(cycles.flatMap(record => daysInRange(record.startDate, record.endDate ?? today)));
@@ -300,7 +301,7 @@ export default function Home() {
         {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={entry => setDeleteDailyTarget(entry as DailyEntryRow)} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /><LifeStagePanel userId={user!.id} /><ReportsAndBackupPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /></>}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /><LifeStagePanel userId={user!.id} /><ReportsAndBackupPanel /><DeviceLockPanel /><ClinicianSharingPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /></>}
       </div>
       <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />
       <Navigation active={tab} onChange={setTab} />

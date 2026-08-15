@@ -96,6 +96,41 @@ export const medicationDoseLogs = pgTable("medication_dose_logs", {
   index("medication_dose_logs_user_date_idx").on(table.userId, table.doseDate),
 ]);
 
+export const clinicianShareReports = pgTable("clinician_share_reports", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  reportJson: text("report_json").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("clinician_share_reports_token_unique").on(table.tokenHash),
+  index("clinician_share_reports_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export const devicePasskeys = pgTable("device_passkeys", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  credentialId: varchar("credential_id", { length: 512 }).notNull(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").notNull().default(0),
+  transportsJson: text("transports_json").notNull().default("[]"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+}, table => [
+  uniqueIndex("device_passkeys_credential_unique").on(table.credentialId),
+  index("device_passkeys_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export const webauthnChallenges = pgTable("webauthn_challenges", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  challenge: varchar("challenge", { length: 512 }).notNull(),
+  ceremony: varchar("ceremony", { length: 20 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type UserProfile = typeof userProfiles.$inferSelect;
@@ -103,3 +138,5 @@ export type CycleRecord = typeof cycleRecords.$inferSelect;
 export type DailyEntry = typeof dailyEntries.$inferSelect;
 export type Medication = typeof medications.$inferSelect;
 export type MedicationDoseLog = typeof medicationDoseLogs.$inferSelect;
+export type ClinicianShareReport = typeof clinicianShareReports.$inferSelect;
+export type DevicePasskey = typeof devicePasskeys.$inferSelect;
