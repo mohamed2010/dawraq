@@ -27,7 +27,14 @@ describe("settings workspace and cycle dialog layout", () => {
     expect(homeSource).toContain("const dialogThemeValues");
     expect(homeSource).toContain("style={dialogThemeStyle(theme)}");
     expect(styleSource).toContain("background-color:var(--surface) !important");
-    expect(styleSource).toContain('[data-slot="dialog-overlay"] { background:rgba(28,20,31,.62) !important');
+    expect(styleSource).toContain('[data-slot="dialog-overlay"] { z-index:80 !important; background:rgba(28,20,31,.62) !important');
+  });
+
+  it("places the cycle dialog above persistent navigation and sizes it to the visible viewport", () => {
+    expect(styleSource).toContain('[data-slot="dialog-overlay"] { z-index:80 !important');
+    expect(styleSource).toContain('[data-slot="dialog-content"] { z-index:81 !important');
+    expect(styleSource).toContain("max-height:min(calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 720px)");
+    expect(styleSource).toContain(".cycle-dialog { width:calc(100vw - 16px) !important");
   });
 
   it("keeps the bottom navigation fixed, opaque, and clear of the page content", () => {
