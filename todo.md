@@ -72,5 +72,6 @@
 - [x] Add local registration/login/logout integration coverage for the signed cookie session contract.
 - [x] Add local-account integration coverage proving one authenticated account cannot access another account's profile, cycles, or daily entries.
 - [x] Add negative local-session mutation tests proving one account cannot update or delete another account's cycle or daily-entry records.
-- [ ] Validate cross-account mutation denial with two real local production accounts before final acceptance.
+- [x] Validate cross-account mutation denial with two real local production accounts before final acceptance.
+- [x] Validate with two real local production accounts that one account cannot delete another account's daily entry.
 - [ ] Deploy and validate independent authentication with a newly registered production account.
