@@ -1,40 +1,49 @@
 import { parse } from "cookie";
-import { COOKIE_NAME } from "../shared/const";
+import { jwtVerify, SignJWT } from "jose";
+import type { User } from "../drizzle/schema";
 import * as db from "../server/db";
-import { sdk, type AuthenticatedUser } from "../server/_core/sdk";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
 
 export class AuthenticationError extends Error {
-  constructor(message = "يجب تسجيل الدخول للوصول إلى هذه البيانات.") { super(message); this.name = "AuthenticationError"; }
+  constructor(message = "يجب تسجيل الدخول للوصول إلى هذه البيانات.") { super(message); }
 }
 
-function getSessionToken(request: Request) {
-  const cookieValue = parse(request.headers.get("cookie") ?? "")[COOKIE_NAME];
-  if (cookieValue) return cookieValue;
-  const authorization = request.headers.get("authorization");
-  return authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined;
+export type AuthenticatedUser = Omit<User, "passwordHash">;
+
+function sessionSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) throw new Error("JWT_SECRET غير مضبوط بصورة آمنة.");
+  return new TextEncoder().encode(secret);
+}
+
+export function publicUser(user: User): AuthenticatedUser {
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+export async function createLocalSession(user: User) {
+  return new SignJWT({ userId: user.id, type: "local" })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt()
+    .setExpirationTime(Math.floor((Date.now() + ONE_YEAR_MS) / 1000))
+    .sign(sessionSecret());
 }
 
 export async function getAuthenticatedUser(request: Request): Promise<AuthenticatedUser> {
-  const sessionToken = getSessionToken(request);
-  const session = await sdk.verifySession(sessionToken);
-  if (!session) throw new AuthenticationError();
-  let user = await db.getUserByOpenId(session.openId);
-  if (!user) {
-    try {
-      const userInfo = await sdk.getUserInfoWithJwt(sessionToken ?? "");
-      if (userInfo.openId !== session.openId) throw new AuthenticationError();
-      await db.upsertUser({ openId: userInfo.openId, name: userInfo.name || null, email: userInfo.email ?? null, loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null, lastSignedIn: new Date() });
-      user = await db.getUserByOpenId(session.openId);
-    } catch (error) {
-      if (error instanceof AuthenticationError) throw error;
-      throw new AuthenticationError("تعذر التحقق من جلسة تسجيل الدخول.");
-    }
+  const sessionToken = parse(request.headers.get("cookie") ?? "")[COOKIE_NAME];
+  if (!sessionToken) throw new AuthenticationError();
+  try {
+    const { payload } = await jwtVerify(sessionToken, sessionSecret(), { algorithms: ["HS256"] });
+    if (payload.type !== "local" || typeof payload.userId !== "number") throw new AuthenticationError();
+    const user = await db.getUserById(payload.userId);
+    if (!user || !user.passwordHash) throw new AuthenticationError();
+    return publicUser(user);
+  } catch (error) {
+    if (error instanceof AuthenticationError) throw error;
+    throw new AuthenticationError();
   }
-  if (!user) throw new AuthenticationError();
-  await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
-  return user;
 }
 
 export function sessionCookie() {
-  return { name: COOKIE_NAME, httpOnly: true, sameSite: "none" as const, secure: true, path: "/", maxAge: 60 * 60 * 24 * 365 };
+  return { name: COOKIE_NAME, httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: Math.floor(ONE_YEAR_MS / 1000) };
 }

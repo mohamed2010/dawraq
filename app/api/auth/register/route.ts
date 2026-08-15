@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import * as db from "../../../../server/db";
 import { createLocalSession, publicUser, sessionCookie } from "../../../../lib/auth";
-import { verifyPassword } from "../../../../lib/password";
+import { hashPassword } from "../../../../lib/password";
 import { routeError, jsonBody } from "../../../../lib/api-route";
-import { loginInput } from "../../../../lib/validation";
+import { registerInput } from "../../../../lib/validation";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const input = loginInput.parse(await jsonBody(request));
-    const user = await db.getUserByEmail(input.email);
-    if (!user || !(await verifyPassword(input.password, user.passwordHash))) throw new Error("INVALID_CREDENTIALS");
-    await db.recordLocalSignIn(user.id);
-    const response = NextResponse.json({ user: publicUser(user) });
+    const input = registerInput.parse(await jsonBody(request));
+    const user = await db.createLocalUser({ name: input.name, email: input.email, passwordHash: await hashPassword(input.password) });
+    const response = NextResponse.json({ user: publicUser(user) }, { status: 201 });
     response.cookies.set(sessionCookie().name, await createLocalSession(user), sessionCookie());
     return response;
   } catch (error) {

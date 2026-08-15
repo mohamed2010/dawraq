@@ -8,15 +8,20 @@ export const mood = pgEnum("mood", ["very_low", "low", "neutral", "good", "great
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  // A legacy-compatible internal identifier. Local accounts use a random
+  // `local_` identifier and never call Manus OAuth.
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
+  // Legacy OAuth-era rows can have no email. New local registrations always
+  // provide one, but the database keeps old private records intact.
   email: varchar("email", { length: 320 }),
+  passwordHash: text("password_hash"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: userRole("role").notNull().default("user"),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
-});
+}, table => [uniqueIndex("users_email_unique").on(table.email)]);
 
 export const userProfiles = pgTable("user_profiles", {
   id: serial("id").primaryKey(),

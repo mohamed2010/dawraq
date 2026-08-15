@@ -1,10 +1,9 @@
 "use client";
 
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { api } from "@/lib/api";
+import { api, ApiError, useApiCache } from "@/lib/api";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { addCalendarDays, calculateCycleStatistics, dateKey, daysInRange, type CycleRecordForStats } from "@shared/cycleMath";
 import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, CloudOff, Droplets, EyeOff, Flower2, HeartPulse, LogIn, LogOut, MessageCircle, Moon, Pencil, Plus, Send, Settings, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
@@ -65,7 +64,7 @@ function replyFor(question: string) {
 }
 
 export default function Home() {
-  const { user, loading, isAuthenticated, logout, refresh } = useAuth();
+  const { user, loading, isAuthenticated, logout } = useAuth();
   const profileQuery = api.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const cyclesQuery = api.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
   const dailyEntriesQuery = api.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -242,10 +241,10 @@ export default function Home() {
     setChatInput("");
   };
 
-  if (loading || (isAuthenticated && (profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading))) {
+  if (isAuthenticated && (loading || profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading)) {
     return <div className="tracker-app loading-screen"><Activity className="animate-pulse" size={30} /></div>;
   }
-  if (!isAuthenticated) return <LoginPage onLoginSuccess={() => void refresh()} />;
+  if (!isAuthenticated) return <LoginPage />;
   if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
   if (!profile?.onboardingCompleted) return <OnboardingPage onSubmit={finishOnboarding} name={onboardingName} setName={setOnboardingName} cycleLength={onboardingCycleLength} setCycleLength={setOnboardingCycleLength} lastPeriod={onboardingLastPeriod} setLastPeriod={setOnboardingLastPeriod} endDate={onboardingEndDate} setEndDate={setOnboardingEndDate} busy={isBusy} />;
   if (profile.stealthMode) return <StealthPage onReturn={() => saveCurrentProfile({ stealthMode: false })} busy={isBusy} />;
@@ -280,90 +279,33 @@ export default function Home() {
   );
 }
 
-function LoginPage({ onLoginSuccess }: { onLoginSuccess?: () => void }) {
-  const [email, setEmail] = useState("");
+function LoginPage() {
+  const cache = useApiCache();
+  const login = api.auth.login.useMutation();
+  const register = api.auth.register.useMutation();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const busy = login.isPending || register.isPending;
 
-  const handleLogin = async (e?: FormEvent, demoEmail?: string, demoName?: string) => {
-    if (e) e.preventDefault();
-    const finalEmail = demoEmail || email.trim();
-    const finalName = demoName || name.trim() || finalEmail.split("@")[0];
-
-    if (!finalEmail) {
-      toast.error("يرجى إدخال البريد الإلكتروني أو الاسم");
-      return;
-    }
-
-    setIsLoading(true);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: finalEmail, name: finalName }),
-      });
-
-      if (!res.ok) throw new Error("تعذر تسجيل الدخول");
-      toast.success("تم تسجيل الدخول بنجاح!");
-      if (onLoginSuccess) {
-        onLoginSuccess();
-      } else {
-        window.location.reload();
-      }
-    } catch {
-      toast.error("حدث خطأ أثناء تسجيل الدخول، يرجى المحاولة ثانية");
-    } finally {
-      setIsLoading(false);
+      const result = mode === "login"
+        ? await login.mutateAsync({ email, password })
+        : await register.mutateAsync({ name, email, password });
+      cache.setQueryData(["auth.me"], result.user);
+      await cache.invalidateQueries({ queryKey: ["auth.me"] });
+      window.location.reload();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "تعذر فتح حسابكِ الآن. حاولي مرة أخرى.");
     }
   };
 
-  return (
-    <div className="tracker-app login-page" data-theme="pink">
-      <div className="surface-card login-card">
-        <div className="login-content">
-          <div className="brand-mark"><Flower2 size={25} /></div>
-          <h1>متابعة دورتكِ، بخصوصية وهدوء.</h1>
-          <p>زُهيرة تحفظ ملف كل مستخدمة بشكل منفصل، وتمنحكِ سجلاً واضحاً وتوقعات مبنية على بياناتكِ.</p>
-
-          <form onSubmit={handleLogin} className="form-stack mt-4">
-            <div className="field">
-              <label htmlFor="login-email">البريد الإلكتروني أو اسم المستخدم</label>
-              <input
-                id="login-email"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="مثال: user@example.com"
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="login-name">اسم العرض <span className="font-normal">(اختياري)</span></label>
-              <input
-                id="login-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="مثال: سارة"
-                disabled={isLoading}
-              />
-            </div>
-            <button className="primary-button w-full mt-2" type="submit" disabled={isLoading}>
-              <LogIn size={17} />
-              {isLoading ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول / البدء الآن"}
-            </button>
-          </form>
-
-          <div className="login-perks mt-6">
-            <span><i><ShieldCheck size={15} /></i>بياناتكِ متصلة ومحفوظة في قاعدة بيانات Supabase</span>
-            <span><i><CalendarDays size={15} /></i>سجل، تقويم، وتوقعات في مكان واحد</span>
-            <span><i><EyeOff size={15} /></i>وضع تخفي بواجهة محايدة عند الحاجة</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="tracker-app login-page" data-theme="pink"><div className="surface-card login-card"><div className="login-content"><div className="brand-mark"><Flower2 size={25} /></div><h1>متابعة دورتكِ، بخصوصية وهدوء.</h1><p>أنشئي حساباً مستقلاً بزُهيرة. لا يلزم أي حساب خارجي.</p><div className="login-perks"><span><i><ShieldCheck size={15} /></i>بيانات منفصلة ومحميّة لكل حساب</span><span><i><CalendarDays size={15} /></i>سجل، تقويم، وتوقعات في مكان واحد</span><span><i><EyeOff size={15} /></i>وضع تخفي بواجهة محايدة عند الحاجة</span></div><form className="mt-5 grid gap-3" onSubmit={submit}>{mode === "register" && <input className="rounded-xl border border-black/10 bg-white/80 px-3 py-2.5 text-right text-sm" value={name} onChange={event => setName(event.target.value)} placeholder="الاسم الظاهر" autoComplete="name" required maxLength={80} />}<input className="rounded-xl border border-black/10 bg-white/80 px-3 py-2.5 text-right text-sm" value={email} onChange={event => setEmail(event.target.value)} placeholder="البريد الإلكتروني" autoComplete="email" required type="email" dir="ltr"/><input className="rounded-xl border border-black/10 bg-white/80 px-3 py-2.5 text-right text-sm" value={password} onChange={event => setPassword(event.target.value)} placeholder="كلمة المرور (8 أحرف على الأقل)" autoComplete={mode === "login" ? "current-password" : "new-password"} required type="password" minLength={8} dir="ltr"/>{error && <p role="alert" className="text-center text-xs text-red-700">{error}</p>}<button className="primary-button w-full" disabled={busy}><LogIn size={17} />{busy ? "جارٍ المتابعة…" : mode === "login" ? "تسجيل الدخول" : "إنشاء حساب"}</button></form><button type="button" className="mt-4 w-full text-center text-xs font-semibold text-[var(--primary)] underline underline-offset-4" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "ليس لديكِ حساب؟ أنشئي حساباً" : "لديكِ حساب بالفعل؟ سجّلي الدخول"}</button><p className="mt-4 text-center text-[.62rem]">كلمة المرور تُحفظ بصورة مشفرة ولا نطلب بيانات تسجيل دخول من أي خدمة أخرى.</p></div></div></div>;
 }
 
 function ProtectedDataError({ onRetry }: { onRetry: () => Promise<unknown> }) { return <div className="tracker-app login-page" data-theme="pink"><div className="surface-card login-card"><div className="login-content"><div className="brand-mark"><CloudOff size={25} /></div><h1>تعذر فتح بياناتكِ الآن</h1><p>لم نتمكن من الوصول إلى ملفكِ الخاص أو سجلات الدورة. لم يتم تعديل أو حذف أي بيانات.</p><button className="primary-button w-full mt-6" onClick={() => void onRetry()}><Activity size={17} />إعادة المحاولة</button></div></div></div>; }

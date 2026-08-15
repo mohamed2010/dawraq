@@ -1,8 +1,8 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { cycleRecords, dailyEntries, InsertUser, userProfiles, users } from "../drizzle/schema";
-import { ENV } from "./_core/env";
 
 let pool: Pool | null = null;
 let database: ReturnType<typeof drizzle> | null = null;
@@ -16,14 +16,14 @@ export async function getDb() {
   return database;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
+export async function upsertUser(user: Omit<InsertUser, "email"> & { email?: string | null }): Promise<void> {
   const db = await getDb();
-  if (!db || !user.openId) return;
-  const role = user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user");
+  if (!db || !user.openId || !user.email) return;
+  const email = user.email.trim().toLowerCase();
   const now = new Date();
-  await db.insert(users).values({ openId: user.openId, name: user.name ?? null, email: user.email ?? null, loginMethod: user.loginMethod ?? null, role, lastSignedIn: now, updatedAt: now }).onConflictDoUpdate({
+  await db.insert(users).values({ openId: user.openId, name: user.name ?? null, email, passwordHash: user.passwordHash ?? null, loginMethod: user.loginMethod ?? "local", role: user.role ?? "user", lastSignedIn: now, updatedAt: now }).onConflictDoUpdate({
     target: users.openId,
-    set: { name: user.name ?? null, email: user.email ?? null, loginMethod: user.loginMethod ?? null, lastSignedIn: now, updatedAt: now },
+    set: { name: user.name ?? null, email, passwordHash: user.passwordHash ?? null, loginMethod: user.loginMethod ?? "local", lastSignedIn: now, updatedAt: now },
   });
 }
 
@@ -31,6 +31,45 @@ export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   return (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0];
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return (await db.select().from(users).where(eq(users.id, id)).limit(1))[0];
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const normalized = email.trim().toLowerCase();
+  return (await db.select().from(users).where(eq(users.email, normalized)).limit(1))[0];
+}
+
+export async function createLocalUser(input: { name: string; email: string; passwordHash: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const email = input.email.trim().toLowerCase();
+  if (await getUserByEmail(email)) throw new Error("ACCOUNT_EXISTS");
+  const now = new Date();
+  const [user] = await db.insert(users).values({
+    openId: `local_${randomUUID().replace(/-/g, "")}`,
+    name: input.name.trim(),
+    email,
+    passwordHash: input.passwordHash,
+    loginMethod: "local",
+    role: "user",
+    createdAt: now,
+    updatedAt: now,
+    lastSignedIn: now,
+  }).returning();
+  return user;
+}
+
+export async function recordLocalSignIn(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(users).set({ lastSignedIn: new Date(), updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
 export async function getProfileForUser(userId: number) {

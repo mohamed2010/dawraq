@@ -61,4 +61,16 @@
 - [x] Add negative permission checks proving the Vercel role cannot perform non-required operations or access non-tracker objects.
 - [x] Add explicit server-only RLS policies for the limited Vercel role while preserving the browser deny-by-default posture.
 - [x] Add a non-sensitive database connectivity signal to the health endpoint for production verification.
-- [ ] Redeploy the health endpoint and confirm its database status field in production after finalizing Vercel database configuration.
+- [x] Redeploy the health endpoint and confirm its database status field in production after finalizing Vercel database configuration.
+- [x] Restore the missing Manus OAuth environment variables in Vercel Production and Preview, then verify that `/api/auth/config` returns non-empty values.
+- [ ] Complete one manual OAuth sign-in and a real per-user cycle save/read/delete smoke test in production.
+- [x] Define and document the transition path from legacy Manus identities to local email accounts.
+- [x] Add secure local registration, login, logout, and signed server-session routes without calling Manus services.
+- [x] Replace the OAuth landing and login actions with Arabic email-and-password account screens.
+- [ ] Remove Manus OAuth runtime dependencies, routes, and production configuration after the replacement is verified.
+- [x] Add security and isolation tests for local credentials, sessions, and account-scoped tracker data.
+- [x] Add local registration/login/logout integration coverage for the signed cookie session contract.
+- [x] Add local-account integration coverage proving one authenticated account cannot access another account's profile, cycles, or daily entries.
+- [x] Add negative local-session mutation tests proving one account cannot update or delete another account's cycle or daily-entry records.
+- [ ] Validate cross-account mutation denial with two real local production accounts before final acceptance.
+- [ ] Deploy and validate independent authentication with a newly registered production account.

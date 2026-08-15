@@ -3,6 +3,8 @@ import { ZodError } from "zod";
 import { AuthenticationError } from "./auth";
 
 const knownMessages: Record<string, { status: number; message: string }> = {
+  ACCOUNT_EXISTS: { status: 409, message: "يوجد حساب مسجل بهذا البريد الإلكتروني بالفعل." },
+  INVALID_CREDENTIALS: { status: 401, message: "البريد الإلكتروني أو كلمة المرور غير صحيحين." },
   ONGOING_PERIOD_EXISTS: { status: 409, message: "يوجد حيض مستمر بالفعل. أضيفي تاريخ النهاية أولاً أو عدّلي السجل الحالي." },
   RECORD_NOT_FOUND: { status: 404, message: "لم يتم العثور على هذا السجل." },
   DAILY_ENTRY_NOT_FOUND: { status: 404, message: "لم يتم العثور على متابعة هذا اليوم." },
