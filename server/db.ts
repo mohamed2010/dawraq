@@ -227,3 +227,23 @@ export async function getPersonalHealthSummaryForUser(userId: number) {
   ]);
   return { profile, cycles, dailyEntries: dailyEntriesForUser, medications: medicationsForUser, medicationDoseLogs: doseLogs };
 }
+
+export async function restoreBackupForUser(userId: number, backup: { profile: { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: "single" | "married"; pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure"; theme: "light" | "dark" | "pink" | "purple"; language: "ar" | "en"; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean } | null; cycles: Array<{ startDate: string; endDate: string | null; symptoms: string[]; flowVolume: "light" | "medium" | "heavy"; notes: string | null }>; dailyEntries: Array<{ entryDate: string; mood: "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious"; painLevel: number; symptoms: string[]; customSymptoms: string[]; energyLevel: number; weightKg: number | null; basalTemperature: number | null; cervicalMucus: "not_observed" | "dry" | "sticky" | "creamy" | "watery" | "egg_white"; opkResult: "not_taken" | "negative" | "positive" | "unclear"; pregnancyTest: "not_taken" | "negative" | "positive" | "unclear"; notes: string | null }>; medications: MedicationInput[] }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  if (backup.cycles.filter(cycle => !cycle.endDate).length > 1) throw new Error("BACKUP_HAS_MULTIPLE_ONGOING_PERIODS");
+  await db.transaction(async tx => {
+    await tx.delete(medicationDoseLogs).where(eq(medicationDoseLogs.userId, userId));
+    await tx.delete(medications).where(eq(medications.userId, userId));
+    await tx.delete(dailyEntries).where(eq(dailyEntries.userId, userId));
+    await tx.delete(cycleRecords).where(eq(cycleRecords.userId, userId));
+    if (backup.profile) {
+      const values = { userId, ...backup.profile, updatedAt: new Date() };
+      await tx.insert(userProfiles).values(values).onConflictDoUpdate({ target: userProfiles.userId, set: values });
+    }
+    if (backup.cycles.length) await tx.insert(cycleRecords).values(backup.cycles.map(cycle => ({ userId, startDate: cycle.startDate, endDate: cycle.endDate, symptomsJson: JSON.stringify(cycle.symptoms), flowVolume: cycle.flowVolume, notes: cycle.notes })));
+    if (backup.dailyEntries.length) await tx.insert(dailyEntries).values(backup.dailyEntries.map(entry => ({ userId, entryDate: entry.entryDate, mood: entry.mood, painLevel: entry.painLevel, symptomsJson: JSON.stringify(entry.symptoms), customSymptomsJson: JSON.stringify(entry.customSymptoms), energyLevel: entry.energyLevel, weightKg: entry.weightKg, basalTemperature: entry.basalTemperature, cervicalMucus: entry.cervicalMucus, opkResult: entry.opkResult, pregnancyTest: entry.pregnancyTest, notes: entry.notes })));
+    if (backup.medications.length) await tx.insert(medications).values(backup.medications.map(medication => ({ userId, name: medication.name, dosage: medication.dosage, notes: medication.notes, reminderTimesJson: JSON.stringify(medication.reminderTimes), isActive: medication.isActive })));
+  });
+  return { cycles: backup.cycles.length, dailyEntries: backup.dailyEntries.length, medications: backup.medications.length };
+}

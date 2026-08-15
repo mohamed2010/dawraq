@@ -106,7 +106,7 @@
 - [x] Add user-controlled large-text and high-contrast accessibility preferences scoped to the signed-in account on the current device.
 - [x] Add medication-adherence summaries based on confirmed taken doses.
 - [x] Add an encrypted portable backup export and file-validation workflow with client-side encryption.
-- [ ] Add a server-side backup restore workflow with explicit merge/overwrite safeguards and ownership checks.
+- [x] Add a server-side backup restore workflow with explicit overwrite safeguards, confirmation, and ownership checks.
 - [ ] Add device-screen lock support using WebAuthn where the browser/device supports it, with a PIN fallback.
 - [x] Add configurable local tracking modes for pregnancy, postpartum, and perimenopause without medical diagnosis.
 - [ ] Add a time-limited, user-revocable clinician-sharing report flow that never exposes the full account by default.
