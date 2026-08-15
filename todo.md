@@ -57,3 +57,8 @@
 - [ ] Verify the deployed auth configuration and database-backed flows after the Vercel environment update.
 - [x] Revoke public execution of the Supabase SECURITY DEFINER helper function created by the initial RLS setup.
 - [x] Document the intentional server-only RLS posture for tracker tables until Supabase Auth policies are introduced.
+- [x] Verify the non-BYPASSRLS Vercel role can perform required tracker CRUD operations under the current server-only RLS posture.
+- [x] Add negative permission checks proving the Vercel role cannot perform non-required operations or access non-tracker objects.
+- [x] Add explicit server-only RLS policies for the limited Vercel role while preserving the browser deny-by-default posture.
+- [x] Add a non-sensitive database connectivity signal to the health endpoint for production verification.
+- [ ] Redeploy the health endpoint and confirm its database status field in production after finalizing Vercel database configuration.
