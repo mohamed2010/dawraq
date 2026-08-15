@@ -213,3 +213,14 @@ button { -webkit-tap-highlight-color: transparent; }
   .tracker-app { font-size:1.03rem; }
   .tracker-app :where(.brand p, .section-header p, .page-card > p, .field-hint, .daily-panel-copy, .ongoing-status p, .record-copy p, .settings-group p, .login-content p, .stealth-card p, .medical-safety p, .pattern-alert p, .guidance-grid ul, .chat-bubble, .empty-state) { font-size:.82rem; }
 }
+
+:root[data-text-scale="large"] .tracker-app { font-size:1.1rem; }
+:root[data-text-scale="extra"] .tracker-app { font-size:1.22rem; }
+:root[data-contrast="high"] .tracker-app { --ink:#11101a; --muted:#42404d; --line:#9b94a9; --surface:#fff; --surface-muted:#f6f4fa; }
+:root[data-contrast="high"] .tracker-app[data-theme="dark"] { --ink:#fff; --muted:#e0dce8; --line:#b5acbf; --surface:#1d1b25; --surface-muted:#262330; }
+.enhancement-panel { margin-top:14px; }
+.reminder-toggle-list { display:grid; gap:9px; margin-top:12px; }
+.report-range { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.adherence-card { display:flex; flex-direction:column; gap:4px; margin-top:12px; padding:12px; border-radius:15px; background:var(--green-soft); color:var(--green); }
+.adherence-card strong { font-size:.75rem; }.adherence-card span { font-size:.68rem; line-height:1.7; }
+.upload-label { position:relative; overflow:hidden; cursor:pointer; }.upload-label input { position:absolute; inset:0; opacity:0; cursor:pointer; }

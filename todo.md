@@ -97,10 +97,20 @@
 - [x] Add fertility observations: cervical-mucus category, OPK result, DPO display, and optional trying-to-conceive mode.
 - [x] Add cycle regularity analysis, shortest/longest cycles, and a personal prediction range based on cycle variation.
 - [x] Add non-diagnostic pattern alerts for repeated severe pain, unusual flow changes, and persistent cycle-length changes.
-- [ ] Add configurable in-browser reminders for predicted period, cycle/entry logging, and period-product preparation.
-- [ ] Add selectable-period reports with fertility, symptom, mood, temperature, and weight summaries ready for printing as PDF.
+- [x] Add configurable in-browser reminders for predicted period, cycle/entry logging, and period-product preparation.
+- [x] Add selectable-period reports with cycle, symptom, mood, temperature, weight, medication, and fertility summaries ready for printing or PDF saving.
 - [x] Add a user-controlled full-account data export and permanent data-deletion flow with explicit confirmation.
 - [ ] Design future-only phases for pregnancy, postpartum, perimenopause, device health integrations, and temporary clinician sharing.
+- [x] Add configurable in-browser reminders for predicted periods, entry logging, and period-product preparation without server-side scheduling.
+- [x] Add selectable date-range reports with cycle, fertility, symptom, mood, medication, temperature, and weight summaries for printing or PDF saving.
+- [x] Add user-controlled large-text and high-contrast accessibility preferences scoped to the signed-in account on the current device.
+- [x] Add medication-adherence summaries based on confirmed taken doses.
+- [x] Add an encrypted portable backup export and file-validation workflow with client-side encryption.
+- [ ] Add a server-side backup restore workflow with explicit merge/overwrite safeguards and ownership checks.
+- [ ] Add device-screen lock support using WebAuthn where the browser/device supports it, with a PIN fallback.
+- [x] Add configurable local tracking modes for pregnancy, postpartum, and perimenopause without medical diagnosis.
+- [ ] Add a time-limited, user-revocable clinician-sharing report flow that never exposes the full account by default.
+- [x] Research and document the credential and consent requirements for optional Apple Health, Google Health Connect, and wearable integrations.
 - [x] Add an Arabic-first and English-compatible responsive typography scale with improved line height and numeral readability.
 - [x] Increase mobile touch-target sizing, field legibility, and action hierarchy without reducing information density.
 - [x] Add responsive font loading and fallback stacks that preserve RTL/LTR readability and performance.
