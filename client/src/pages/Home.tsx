@@ -5,6 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, ApiError, useApiCache } from "@/lib/api";
 import { BrowserMedicationReminderController, MedicationPanel } from "@/components/MedicationTools";
+import { CycleGuidancePanel } from "@/components/CycleGuidancePanel";
 import { LanguageController, type AppLanguage } from "@/components/LanguageController";
 import { AppLockScreen, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
@@ -287,7 +288,7 @@ export default function Home() {
           <div className="brand"><div className="brand-mark"><Flower2 size={23} /></div><div><h1>زُهيرة</h1><p>مساحتكِ الخاصة لمتابعة دورتكِ</p></div></div>
           <button className="icon-button" aria-label="فتح الإعدادات" onClick={() => setTab("settings")}><Settings size={19} /></button>
         </header>
-        {tab === "home" && <HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} />}
+        {tab === "home" && <><HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} /><CycleGuidancePanel statistics={statistics} today={today} dailyEntry={dailyEntries.find(entry => entry.entryDate === today) ?? null} /></>}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
         {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}

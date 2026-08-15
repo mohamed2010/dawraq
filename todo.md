@@ -88,3 +88,7 @@
 - [x] Localize date and calendar formatting for Arabic and English.
 - [x] Improve bilingual accessibility labels and direction-aware interface controls.
 - [x] Add automated tests for language selection validation and direction changes.
+- [x] Add a clear ovulation and fertile-window panel based on each user’s recorded cycle history.
+- [x] Add general, non-diagnostic mood-support suggestions matched to the cycle phase and daily entries.
+- [x] Add general comfort suggestions for period-related pain with prominent urgent-care guidance.
+- [x] Add tests for ovulation panel inputs and safety-copy visibility while preserving existing per-user isolation coverage.

@@ -3,6 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "../client/src/components/ReferenceFeaturePanels";
 import { languageDocumentAttributes } from "../client/src/components/LanguageController";
+import { CycleGuidancePanel } from "../client/src/components/CycleGuidancePanel";
 import { appLockInput, cycleInput, dailyEntryInput, medicationInput, profileInput } from "../lib/validation";
 
 describe("Next.js API validation", () => {
@@ -31,6 +32,14 @@ describe("Next.js API validation", () => {
   it("switches the document language and reading direction for English and Arabic", () => {
     expect(languageDocumentAttributes("en")).toEqual({ lang: "en", dir: "ltr" });
     expect(languageDocumentAttributes("ar")).toEqual({ lang: "ar", dir: "rtl" });
+  });
+
+  it("renders ovulation estimates with non-diagnostic mood, comfort, and urgent-care guidance", () => {
+    const guidance = renderToStaticMarkup(<CycleGuidancePanel today="2026-08-14" dailyEntry={{ mood: "anxious", painLevel: 3 }} statistics={{ averageCycleLength: 28, averagePeriodDuration: 5, nextPeriodStart: "2026-08-28", ovulationDate: "2026-08-14", fertileStart: "2026-08-09", fertileEnd: "2026-08-15", currentPeriodDay: null, lastRecord: { id: 1, startDate: "2026-07-31", endDate: "2026-08-04" } }} />);
+    expect(guidance).toContain("موعد التبويض المتوقع");
+    expect(guidance).toContain("دعم المزاج اليوم");
+    expect(guidance).toContain("لا تعتمدي على نافذة الخصوبة لمنع الحمل أو تأكيده");
+    expect(guidance).toContain("ألماً مزعجاً أو شديداً اليوم");
   });
 
   it("renders the new health panels with the stored pain, preferences, and entries", () => {
