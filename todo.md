@@ -125,3 +125,4 @@
 - [x] Redesign cycle edit/delete actions and the cycle editor modal to remove translucent controls and prevent an intrusive internal scrollbar on mobile.
 - [x] Reorganize the oversized settings page into compact mobile-friendly sections without removing any existing settings or privacy tools.
 - [x] Fix the bottom navigation on desktop and mobile with an opaque surface and safe content spacing so it never overlaps page content.
+- [x] Fix the cycle editor modal transparency by applying explicit opaque dialog and overlay colors outside the themed application container, with a narrow contained scrollbar.

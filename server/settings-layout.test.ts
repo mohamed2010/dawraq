@@ -23,6 +23,13 @@ describe("settings workspace and cycle dialog layout", () => {
     expect(styleSource).toContain(".mini-action.edit-action");
   });
 
+  it("applies explicit theme variables and an opaque backdrop to portal dialogs", () => {
+    expect(homeSource).toContain("const dialogThemeValues");
+    expect(homeSource).toContain("style={dialogThemeStyle(theme)}");
+    expect(styleSource).toContain("background-color:var(--surface) !important");
+    expect(styleSource).toContain('[data-slot="dialog-overlay"] { background:rgba(28,20,31,.62) !important');
+  });
+
   it("keeps the bottom navigation fixed, opaque, and clear of the page content", () => {
     expect(styleSource).toContain(".bottom-nav { position:fixed");
     expect(styleSource).toContain("background:var(--surface)");
