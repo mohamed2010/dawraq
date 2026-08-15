@@ -122,3 +122,5 @@
 - [ ] Add a safe logged-out password-reset email flow after configuring an approved transactional email provider and sending domain.
 - [x] Import validated historical cycle records from the approved Notion database into the approved target account, preserving ongoing periods and skipping duplicates.
 - [x] Read the approved public Notion view and verify the per1, start, and end field mapping before importing any records.
+- [x] Redesign cycle edit/delete actions and the cycle editor modal to remove translucent controls and prevent an intrusive internal scrollbar on mobile.
+- [x] Reorganize the oversized settings page into compact mobile-friendly sections without removing any existing settings or privacy tools.
