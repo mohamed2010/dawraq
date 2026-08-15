@@ -11,6 +11,12 @@ export type CycleStatistics = {
   ovulationDate: string | null;
   fertileStart: string | null;
   fertileEnd: string | null;
+  daysAfterOvulation: number | null;
+  shortestCycleLength: number | null;
+  longestCycleLength: number | null;
+  isIrregular: boolean;
+  predictionRangeStart: string | null;
+  predictionRangeEnd: string | null;
   currentPeriodDay: number | null;
   lastRecord: CycleRecordForStats | null;
 };
@@ -71,6 +77,13 @@ export function calculateCycleStatistics(
   const ovulationDate = nextPeriodStart ? addCalendarDays(nextPeriodStart, -14) : null;
   const fertileStart = ovulationDate ? addCalendarDays(ovulationDate, -5) : null;
   const fertileEnd = ovulationDate ? addCalendarDays(ovulationDate, 1) : null;
+  const shortestCycleLength = cycleIntervals.length ? Math.min(...cycleIntervals) : null;
+  const longestCycleLength = cycleIntervals.length ? Math.max(...cycleIntervals) : null;
+  const isIrregular = shortestCycleLength !== null && longestCycleLength !== null && longestCycleLength - shortestCycleLength >= 7;
+  const rangePadding = shortestCycleLength !== null && longestCycleLength !== null ? Math.ceil((longestCycleLength - shortestCycleLength) / 2) : 0;
+  const predictionRangeStart = nextPeriodStart ? addCalendarDays(nextPeriodStart, -rangePadding) : null;
+  const predictionRangeEnd = nextPeriodStart ? addCalendarDays(nextPeriodStart, rangePadding) : null;
+  const daysAfterOvulation = ovulationDate && nextPeriodStart && today >= ovulationDate && today < nextPeriodStart ? daysBetween(today, ovulationDate) : null;
   const currentPeriodDay = lastRecord && !lastRecord.endDate && lastRecord.startDate <= today
     ? daysBetween(today, lastRecord.startDate) + 1
     : null;
@@ -82,6 +95,12 @@ export function calculateCycleStatistics(
     ovulationDate,
     fertileStart,
     fertileEnd,
+    daysAfterOvulation,
+    shortestCycleLength,
+    longestCycleLength,
+    isIrregular,
+    predictionRangeStart,
+    predictionRangeEnd,
     currentPeriodDay,
     lastRecord,
   };

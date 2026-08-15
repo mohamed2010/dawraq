@@ -65,14 +65,15 @@ export function DailyHealthPanel({ entryDate, entry, onSave, onDelete, busy }: {
 }
 
 export function ProfileHealthPanel({ profile, onSave, busy }: {
-  profile: { typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus };
-  onSave: (changes: { typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus }) => Promise<void>;
+  profile: { typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; tryingToConceive: boolean };
+  onSave: (changes: { typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; tryingToConceive: boolean }) => Promise<void>;
   busy: boolean;
 }) {
   const [bleedingDays, setBleedingDays] = useState(profile.typicalBleedingDays);
   const [relationship, setRelationship] = useState<RelationshipStatus>(profile.relationshipStatus);
   const [pregnancy, setPregnancy] = useState<PregnancyStatus>(profile.pregnancyStatus);
-  useEffect(() => { setBleedingDays(profile.typicalBleedingDays); setRelationship(profile.relationshipStatus); setPregnancy(profile.pregnancyStatus); }, [profile]);
+  const [tryingToConceive, setTryingToConceive] = useState(profile.tryingToConceive);
+  useEffect(() => { setBleedingDays(profile.typicalBleedingDays); setRelationship(profile.relationshipStatus); setPregnancy(profile.pregnancyStatus); setTryingToConceive(profile.tryingToConceive); }, [profile]);
 
   return <section className="surface-card page-card reference-panel profile-health-panel">
     <div className="section-header"><div><h2>تفضيلات المتابعة</h2><p>تساعد هذه الاختيارات على تخصيص الرسائل والملخصات لكِ فقط.</p></div></div>
@@ -80,7 +81,8 @@ export function ProfileHealthPanel({ profile, onSave, busy }: {
       <div className="field"><label>مدة الحيض المعتادة (بالأيام)</label><input type="number" min="1" max="14" value={bleedingDays} onChange={event => setBleedingDays(Number(event.target.value))} /></div>
       <div className="field"><label>الحالة الاجتماعية <span className="font-normal">(اختياري)</span></label><div className="choice-grid"><button type="button" className={relationship === "single" ? "profile-choice selected" : "profile-choice"} onClick={() => setRelationship("single")}>عزباء</button><button type="button" className={relationship === "married" ? "profile-choice selected" : "profile-choice"} onClick={() => setRelationship("married")}>متزوجة</button></div></div>
       <div className="field"><label>وضع المتابعة الحالي <span className="font-normal">(اختياري)</span></label><div className="choice-grid choice-grid-three"><button type="button" className={pregnancy === "not_pregnant" ? "profile-choice selected" : "profile-choice"} onClick={() => setPregnancy("not_pregnant")}>متابعة الدورة</button><button type="button" className={pregnancy === "pregnant" ? "profile-choice selected" : "profile-choice"} onClick={() => setPregnancy("pregnant")}>حامل</button><button type="button" className={pregnancy === "not_sure" ? "profile-choice selected" : "profile-choice"} onClick={() => setPregnancy("not_sure")}>غير متأكدة</button></div><span className="field-hint">عند اختيار «حامل» سنوقف تنبؤات الحيض فقط، ولن نقدّم إرشادات أو تشخيصاً للحمل.</span></div>
-      <button className="secondary-button" disabled={busy} onClick={() => void onSave({ typicalBleedingDays: bleedingDays, relationshipStatus: relationship, pregnancyStatus: pregnancy })}>حفظ تفضيلات المتابعة</button>
+      <div className="field"><label>وضع محاولة الحمل <span className="font-normal">(اختياري)</span></label><div className="choice-grid"><button type="button" className={tryingToConceive ? "profile-choice selected" : "profile-choice"} onClick={() => setTryingToConceive(true)}>مفعّل</button><button type="button" className={!tryingToConceive ? "profile-choice selected" : "profile-choice"} onClick={() => setTryingToConceive(false)}>غير مفعّل</button></div><span className="field-hint">يُظهر DPO وملاحظات الخصوبة كتقديرات تنظيمية فقط، وليس كتأكيد للحمل أو الإباضة.</span></div>
+      <button className="secondary-button" disabled={busy} onClick={() => void onSave({ typicalBleedingDays: bleedingDays, relationshipStatus: relationship, pregnancyStatus: pregnancy, tryingToConceive })}>حفظ تفضيلات المتابعة</button>
     </div>
   </section>;
 }

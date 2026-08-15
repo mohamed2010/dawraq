@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, real, serial, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 export const userRole = pgEnum("user_role", ["user", "admin"]);
 export const relationshipStatus = pgEnum("relationship_status", ["single", "married"]);
@@ -33,6 +33,7 @@ export const userProfiles = pgTable("user_profiles", {
   pregnancyStatus: pregnancyStatus("pregnancy_status").notNull().default("not_pregnant"),
   theme: appTheme("theme").notNull().default("pink"),
   language: varchar("language", { length: 5 }).notNull().default("ar"),
+  tryingToConceive: boolean("trying_to_conceive").notNull().default(false),
   stealthMode: boolean("stealth_mode").notNull().default(false),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
   appLockHash: text("app_lock_hash"),
@@ -46,6 +47,7 @@ export const cycleRecords = pgTable("cycle_records", {
   startDate: varchar("start_date", { length: 10 }).notNull(),
   endDate: varchar("end_date", { length: 10 }),
   symptomsJson: text("symptoms_json").notNull(),
+  flowVolume: varchar("flow_volume", { length: 12 }).notNull().default("medium"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -58,6 +60,13 @@ export const dailyEntries = pgTable("daily_entries", {
   mood: mood("mood").notNull(),
   painLevel: integer("pain_level").notNull().default(0),
   symptomsJson: text("symptoms_json").notNull(),
+  customSymptomsJson: text("custom_symptoms_json").notNull().default("[]"),
+  energyLevel: integer("energy_level").notNull().default(3),
+  weightKg: real("weight_kg"),
+  basalTemperature: real("basal_temperature"),
+  cervicalMucus: varchar("cervical_mucus", { length: 16 }).notNull().default("not_observed"),
+  opkResult: varchar("opk_result", { length: 16 }).notNull().default("not_taken"),
+  pregnancyTest: varchar("pregnancy_test", { length: 16 }).notNull().default("not_taken"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

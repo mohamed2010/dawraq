@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { api, ApiError, useApiCache } from "@/lib/api";
 import { BrowserMedicationReminderController, MedicationPanel } from "@/components/MedicationTools";
 import { CycleGuidancePanel } from "@/components/CycleGuidancePanel";
+import { HealthPatternAlerts } from "@/components/HealthPatternAlerts";
 import { LanguageController, type AppLanguage } from "@/components/LanguageController";
 import { AppLockScreen, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
@@ -17,15 +18,18 @@ import { toast } from "sonner";
 
 type Tab = "home" | "records" | "calendar" | "medications" | "chat" | "settings";
 type ThemeName = "light" | "dark" | "pink" | "purple";
-type CycleRow = CycleRecordForStats & { symptoms: string[]; notes: string | null };
-type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; notes: string };
+type FlowVolume = "light" | "medium" | "heavy";
+type CycleRow = CycleRecordForStats & { symptoms: string[]; flowVolume: FlowVolume; notes: string | null };
+type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; flowVolume: FlowVolume; notes: string };
 type ChatMessage = { id: number; role: "assistant" | "user"; text: string };
-type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; stealthMode: number; onboardingCompleted: number };
+type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; tryingToConceive: boolean; stealthMode: number; onboardingCompleted: number };
 type MoodValue = "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious";
 type RelationshipStatus = "single" | "married";
 type PregnancyStatus = "not_pregnant" | "pregnant" | "not_sure";
-type DailyEntryRow = { id: number; entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string | null };
-type DailyFormState = { id: number | null; entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string };
+type FertilityMucus = "not_observed" | "dry" | "sticky" | "creamy" | "watery" | "egg_white";
+type TestResult = "not_taken" | "negative" | "positive" | "unclear";
+type DailyEntryRow = { id: number; entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; customSymptoms: string[]; energyLevel: number; weightKg: number | null; basalTemperature: number | null; cervicalMucus: FertilityMucus; opkResult: TestResult; pregnancyTest: TestResult; notes: string | null };
+type DailyFormState = Omit<DailyEntryRow, "id" | "notes"> & { id: number | null; notes: string };
 
 const symptomOptions = ["تقلصات", "صداع", "انتفاخ", "تقلبات مزاجية", "حب الشباب", "إرهاق"];
 const dailySymptomOptions = ["تقلصات", "صداع", "انتفاخ", "إرهاق", "غثيان", "ألم الثدي", "تغير الشهية", "تقلبات مزاجية"];
@@ -53,11 +57,11 @@ const formatDate = (value: string | null) => value
   : "غير متاح";
 
 function emptyRecordForm(): RecordFormState {
-  return { id: null, startDate: dateKey(new Date()), endDate: "", symptoms: [], notes: "" };
+  return { id: null, startDate: dateKey(new Date()), endDate: "", symptoms: [], flowVolume: "medium", notes: "" };
 }
 
 function emptyDailyForm(entryDate = dateKey(new Date())): DailyFormState {
-  return { id: null, entryDate, mood: "neutral", painLevel: 0, symptoms: [], notes: "" };
+  return { id: null, entryDate, mood: "neutral", painLevel: 0, symptoms: [], customSymptoms: [], energyLevel: 3, weightKg: null, basalTemperature: null, cervicalMucus: "not_observed", opkResult: "not_taken", pregnancyTest: "not_taken", notes: "" };
 }
 
 function replyFor(question: string) {
@@ -147,7 +151,7 @@ export default function Home() {
     return () => { window.removeEventListener("blur", lock); document.removeEventListener("visibilitychange", onVisibility); };
   }, [appLockQuery.data?.enabled]);
 
-  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; stealthMode: boolean; onboardingCompleted: boolean }>) => {
+  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
     try {
       await saveProfile.mutateAsync({
@@ -158,6 +162,7 @@ export default function Home() {
         pregnancyStatus: changes.pregnancyStatus ?? profile.pregnancyStatus,
         theme: changes.theme ?? profile.theme,
         language: changes.language ?? profile.language ?? "ar",
+        tryingToConceive: changes.tryingToConceive ?? Boolean(profile.tryingToConceive),
         stealthMode: changes.stealthMode ?? Boolean(profile.stealthMode),
         onboardingCompleted: changes.onboardingCompleted ?? Boolean(profile.onboardingCompleted),
       });
@@ -172,8 +177,8 @@ export default function Home() {
     if (!onboardingName.trim()) return toast.error("اكتبي الاسم الذي تريدين ظهوره في التطبيق.");
     if (onboardingEndDate && onboardingEndDate < onboardingLastPeriod) return toast.error("تاريخ النهاية لا يمكن أن يسبق تاريخ البداية.");
     try {
-      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", language: "ar", stealthMode: false, onboardingCompleted: true });
-      await createCycle.mutateAsync({ startDate: onboardingLastPeriod, endDate: onboardingEndDate || null, symptoms: [], notes: "بداية متابعة زُهيرة" });
+      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", language: "ar", tryingToConceive: false, stealthMode: false, onboardingCompleted: true });
+      await createCycle.mutateAsync({ startDate: onboardingLastPeriod, endDate: onboardingEndDate || null, symptoms: [], flowVolume: "medium", notes: "بداية متابعة زُهيرة" });
       await refreshData();
       toast.success("تم تجهيز ملفكِ الخاص بنجاح.");
     } catch (error) {
@@ -183,11 +188,11 @@ export default function Home() {
 
   const openNewRecord = () => { setRecordForm(emptyRecordForm()); setRecordOpen(true); };
   const openEditRecord = (record: CycleRow) => {
-    setRecordForm({ id: record.id, startDate: record.startDate, endDate: record.endDate ?? "", symptoms: record.symptoms, notes: record.notes ?? "" });
+    setRecordForm({ id: record.id, startDate: record.startDate, endDate: record.endDate ?? "", symptoms: record.symptoms, flowVolume: record.flowVolume ?? "medium", notes: record.notes ?? "" });
     setRecordOpen(true);
   };
   const closeOngoingRecord = (record: CycleRow) => {
-    setRecordForm({ id: record.id, startDate: record.startDate, endDate: today, symptoms: record.symptoms, notes: record.notes ?? "" });
+    setRecordForm({ id: record.id, startDate: record.startDate, endDate: today, symptoms: record.symptoms, flowVolume: record.flowVolume ?? "medium", notes: record.notes ?? "" });
     setRecordOpen(true);
   };
   const toggleSymptom = (symptom: string) => setRecordForm(current => ({ ...current, symptoms: current.symptoms.includes(symptom) ? current.symptoms.filter(item => item !== symptom) : [...current.symptoms, symptom] }));
@@ -195,7 +200,7 @@ export default function Home() {
     event.preventDefault();
     if (recordForm.endDate && recordForm.endDate < recordForm.startDate) return toast.error("تاريخ النهاية لا يمكن أن يسبق البداية.");
     try {
-      const payload = { startDate: recordForm.startDate, endDate: recordForm.endDate || null, symptoms: recordForm.symptoms, notes: recordForm.notes.trim() || null };
+      const payload = { startDate: recordForm.startDate, endDate: recordForm.endDate || null, symptoms: recordForm.symptoms, flowVolume: recordForm.flowVolume, notes: recordForm.notes.trim() || null };
       if (recordForm.id) await updateCycle.mutateAsync({ id: recordForm.id, ...payload });
       else await createCycle.mutateAsync(payload);
       setRecordOpen(false);
@@ -218,14 +223,14 @@ export default function Home() {
   };
   const openDailyEntry = (entryDate: string) => {
     const existing = dailyEntries.find(entry => entry.entryDate === entryDate);
-    setDailyForm(existing ? { id: existing.id, entryDate: existing.entryDate, mood: existing.mood, painLevel: existing.painLevel, symptoms: existing.symptoms, notes: existing.notes ?? "" } : emptyDailyForm(entryDate));
+    setDailyForm(existing ? { id: existing.id, entryDate: existing.entryDate, mood: existing.mood, painLevel: existing.painLevel, symptoms: existing.symptoms, customSymptoms: existing.customSymptoms ?? [], energyLevel: existing.energyLevel ?? 3, weightKg: existing.weightKg, basalTemperature: existing.basalTemperature, cervicalMucus: existing.cervicalMucus ?? "not_observed", opkResult: existing.opkResult ?? "not_taken", pregnancyTest: existing.pregnancyTest ?? "not_taken", notes: existing.notes ?? "" } : emptyDailyForm(entryDate));
     setDailyOpen(true);
   };
   const toggleDailySymptom = (symptom: string) => setDailyForm(current => ({ ...current, symptoms: current.symptoms.includes(symptom) ? current.symptoms.filter(item => item !== symptom) : [...current.symptoms, symptom] }));
   const saveDaily = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await saveDailyEntry.mutateAsync({ entryDate: dailyForm.entryDate, mood: dailyForm.mood, painLevel: dailyForm.painLevel, symptoms: dailyForm.symptoms, notes: dailyForm.notes.trim() || null });
+      await saveDailyEntry.mutateAsync({ ...dailyForm, notes: dailyForm.notes.trim() || null });
       setDailyOpen(false);
       await dailyEntriesQuery.refetch();
       toast.success(dailyForm.id ? "تم تعديل متابعة اليوم." : "تم حفظ متابعة اليوم.");
@@ -235,7 +240,8 @@ export default function Home() {
   };
   const saveDailyFromPanel = async (input: { entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string | null }) => {
     try {
-      await saveDailyEntry.mutateAsync(input);
+      const existing = dailyEntries.find(entry => entry.entryDate === input.entryDate);
+      await saveDailyEntry.mutateAsync({ ...input, customSymptoms: existing?.customSymptoms ?? [], energyLevel: existing?.energyLevel ?? 3, weightKg: existing?.weightKg ?? null, basalTemperature: existing?.basalTemperature ?? null, cervicalMucus: existing?.cervicalMucus ?? "not_observed", opkResult: existing?.opkResult ?? "not_taken", pregnancyTest: existing?.pregnancyTest ?? "not_taken" });
       await dailyEntriesQuery.refetch();
       toast.success("تم حفظ متابعة اليوم.");
     } catch (error) {
@@ -288,12 +294,12 @@ export default function Home() {
           <div className="brand"><div className="brand-mark"><Flower2 size={23} /></div><div><h1>زُهيرة</h1><p>مساحتكِ الخاصة لمتابعة دورتكِ</p></div></div>
           <button className="icon-button" aria-label="فتح الإعدادات" onClick={() => setTab("settings")}><Settings size={19} /></button>
         </header>
-        {tab === "home" && <><HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} /><CycleGuidancePanel statistics={statistics} today={today} dailyEntry={dailyEntries.find(entry => entry.entryDate === today) ?? null} /></>}
+        {tab === "home" && <><HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} /><CycleGuidancePanel statistics={statistics} today={today} dailyEntry={dailyEntries.find(entry => entry.entryDate === today) ?? null} tryingToConceive={profile.tryingToConceive} /><HealthPatternAlerts statistics={statistics} cycles={cycles} dailyEntries={dailyEntries} /></>}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
-        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
+        {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={entry => setDeleteDailyTarget(entry as DailyEntryRow)} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} /></>}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /></>}
       </div>
       <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />
       <Navigation active={tab} onChange={setTab} />
@@ -372,6 +378,9 @@ function SettingsTab({ name, setName, cycleLength, setCycleLength, profile, late
 
 function Navigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) { const items: { id: Tab; label: string; icon: React.ReactNode }[] = [{ id: "home", label: "الرئيسية", icon: <HeartPulse size={18} /> }, { id: "records", label: "السجل", icon: <Droplets size={18} /> }, { id: "calendar", label: "التقويم", icon: <CalendarDays size={18} /> }, { id: "medications", label: "الأدوية", icon: <Pill size={18} /> }, { id: "chat", label: "المساعد", icon: <MessageCircle size={18} /> }, { id: "settings", label: "الإعدادات", icon: <Settings size={18} /> }]; return <nav className="bottom-nav" aria-label="التنقل الرئيسي"><div className="bottom-nav-inner">{items.map(item => <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => onChange(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div></nav>; }
 
-function DailyEntryDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: DailyFormState; setForm: React.Dispatch<React.SetStateAction<DailyFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل متابعة اليوم" : "متابعة يومية"}</DialogTitle><DialogDescription>سجلي مزاجكِ والأعراض التي لاحظتها. هذا السجل خاص بحسابكِ.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>اليوم المختار</label><input type="date" value={form.entryDate} disabled /></div><div className="field"><label>كيف كان مزاجكِ؟</label><div className="mood-grid">{moodOptions.map(option => <button type="button" key={option.value} className={`mood-choice ${form.mood === option.value ? "selected" : ""}`} onClick={() => setForm(current => ({ ...current, mood: option.value }))}><span>{option.emoji}</span>{option.label}</button>)}</div></div><div className="field"><label>أعراض اليوم <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{dailySymptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظة خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ساعدني النوم المبكر اليوم" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ متابعة اليوم"}</button></form></DialogContent></Dialog>; }
+function DailyEntryDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: DailyFormState; setForm: React.Dispatch<React.SetStateAction<DailyFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) {
+  const isEdit = Boolean(form.id);
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل متابعة اليوم" : "متابعة يومية"}</DialogTitle><DialogDescription>سجلي مزاجكِ والأعراض والقياسات التي ترغبين في متابعتها. جميعها اختيارية ومحفوظة لحسابكِ فقط.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>اليوم المختار</label><input type="date" value={form.entryDate} disabled /></div><div className="field"><label>كيف كان مزاجكِ؟</label><div className="mood-grid">{moodOptions.map(option => <button type="button" key={option.value} className={`mood-choice ${form.mood === option.value ? "selected" : ""}`} onClick={() => setForm(current => ({ ...current, mood: option.value }))}><span>{option.emoji}</span>{option.label}</button>)}</div></div><div className="field"><label>مستوى الطاقة</label><div className="choice-grid">{[1, 2, 3, 4, 5].map(level => <button key={level} type="button" className={form.energyLevel === level ? "profile-choice selected" : "profile-choice"} onClick={() => setForm(current => ({ ...current, energyLevel: level }))}>{level} / 5</button>)}</div></div><div className="field"><label>أعراض اليوم <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{dailySymptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div><input className="mt-2" value={form.customSymptoms.join("، ")} onChange={event => setForm(current => ({ ...current, customSymptoms: event.target.value.split(/[,،]/).map(item => item.trim()).filter(Boolean).slice(0, 8) }))} placeholder="أعراض أخرى مفصولة بفاصلة (اختياري)" /></div><div className="field"><label>قياسات اختيارية</label><div className="form-grid"><input type="number" min="20" max="300" step="0.1" value={form.weightKg ?? ""} onChange={event => setForm(current => ({ ...current, weightKg: event.target.value === "" ? null : Number(event.target.value) }))} placeholder="الوزن كجم" /><input type="number" min="34" max="43" step="0.01" value={form.basalTemperature ?? ""} onChange={event => setForm(current => ({ ...current, basalTemperature: event.target.value === "" ? null : Number(event.target.value) }))} placeholder="الحرارة الأساسية °C" /></div></div><div className="field"><label>ملاحظات الخصوبة <span className="font-normal">(اختياري)</span></label><div className="form-stack compact"><select value={form.cervicalMucus} onChange={event => setForm(current => ({ ...current, cervicalMucus: event.target.value as FertilityMucus }))}><option value="not_observed">مخاط عنق الرحم: لم ألاحظ</option><option value="dry">جاف</option><option value="sticky">لزج</option><option value="creamy">كريمي</option><option value="watery">مائي</option><option value="egg_white">شفاف ومطاطي</option></select><select value={form.opkResult} onChange={event => setForm(current => ({ ...current, opkResult: event.target.value as TestResult }))}><option value="not_taken">اختبار تبويض: لم أجره</option><option value="negative">اختبار تبويض: سلبي</option><option value="positive">اختبار تبويض: إيجابي</option><option value="unclear">اختبار تبويض: غير واضح</option></select><select value={form.pregnancyTest} onChange={event => setForm(current => ({ ...current, pregnancyTest: event.target.value as TestResult }))}><option value="not_taken">اختبار حمل: لم أجره</option><option value="negative">اختبار حمل: سلبي</option><option value="positive">اختبار حمل: إيجابي</option><option value="unclear">اختبار حمل: غير واضح</option></select></div></div><div className="field"><label>ملاحظة خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ساعدني النوم المبكر اليوم" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ متابعة اليوم"}</button></form></DialogContent></Dialog>;
+}
 
-function RecordDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: RecordFormState; setForm: React.Dispatch<React.SetStateAction<RecordFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل سجل الدورة" : "تسجيل دورة جديدة"}</DialogTitle><DialogDescription>أضيفي تاريخ البداية، واتركي تاريخ النهاية فارغاً إذا كان الحيض مستمراً.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>أول يوم لنزول الدم</label><input type="date" max={dateKey(new Date())} value={form.startDate} onChange={event => setForm(current => ({ ...current, startDate: event.target.value }))} required /></div><div className="field"><label>آخر يوم للحيض <span className="font-normal">(اختياري)</span></label><input type="date" min={form.startDate} max={dateKey(new Date())} value={form.endDate} onChange={event => setForm(current => ({ ...current, endDate: event.target.value }))} /><span className="field-hint">{form.endDate ? "سيُعامل السجل كدورة مكتملة." : "سيظهر السجل كحيض مستمر ويمكن إغلاقه لاحقاً."}</span></div><div className="field"><label>أعراض مرافقة <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{symptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظات خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ألم أخف من المعتاد" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ السجل"}</button></form></DialogContent></Dialog>; }
+function RecordDialog({ open, onOpenChange, form, setForm, onToggleSymptom, onSubmit, busy }: { open: boolean; onOpenChange: (open: boolean) => void; form: RecordFormState; setForm: React.Dispatch<React.SetStateAction<RecordFormState>>; onToggleSymptom: (symptom: string) => void; onSubmit: (event: FormEvent) => void; busy: boolean }) { const isEdit = Boolean(form.id); return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="dialog-content" dir="rtl"><DialogHeader><DialogTitle>{isEdit ? "تعديل سجل الدورة" : "تسجيل دورة جديدة"}</DialogTitle><DialogDescription>أضيفي تاريخ البداية، واتركي تاريخ النهاية فارغاً إذا كان الحيض مستمراً.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>أول يوم لنزول الدم</label><input type="date" max={dateKey(new Date())} value={form.startDate} onChange={event => setForm(current => ({ ...current, startDate: event.target.value }))} required /></div><div className="field"><label>آخر يوم للحيض <span className="font-normal">(اختياري)</span></label><input type="date" min={form.startDate} max={dateKey(new Date())} value={form.endDate} onChange={event => setForm(current => ({ ...current, endDate: event.target.value }))} /><span className="field-hint">{form.endDate ? "سيُعامل السجل كدورة مكتملة." : "سيظهر السجل كحيض مستمر ويمكن إغلاقه لاحقاً."}</span></div><div className="field"><label>كمية النزيف المعتادة لهذه الدورة</label><div className="choice-grid"><button type="button" className={form.flowVolume === "light" ? "profile-choice selected" : "profile-choice"} onClick={() => setForm(current => ({ ...current, flowVolume: "light" }))}>خفيف</button><button type="button" className={form.flowVolume === "medium" ? "profile-choice selected" : "profile-choice"} onClick={() => setForm(current => ({ ...current, flowVolume: "medium" }))}>متوسط</button><button type="button" className={form.flowVolume === "heavy" ? "profile-choice selected" : "profile-choice"} onClick={() => setForm(current => ({ ...current, flowVolume: "heavy" }))}>كثير</button></div></div><div className="field"><label>أعراض مرافقة <span className="font-normal">(اختياري)</span></label><div className="symptom-grid">{symptomOptions.map(symptom => <label key={symptom} className="symptom-choice"><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={() => onToggleSymptom(symptom)} />{symptom}</label>)}</div></div><div className="field"><label>ملاحظات خاصة <span className="font-normal">(اختياري)</span></label><textarea value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))} placeholder="مثال: ألم أخف من المعتاد" maxLength={1000} /></div><button className="primary-button" disabled={busy} type="submit"><CheckCircle2 size={16} />{busy ? "جارٍ الحفظ..." : isEdit ? "حفظ التعديل" : "حفظ السجل"}</button></form></DialogContent></Dialog>; }

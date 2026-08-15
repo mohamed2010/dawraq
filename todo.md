@@ -92,3 +92,12 @@
 - [x] Add general, non-diagnostic mood-support suggestions matched to the cycle phase and daily entries.
 - [x] Add general comfort suggestions for period-related pain with prominent urgent-care guidance.
 - [x] Add tests for ovulation panel inputs and safety-copy visibility while preserving existing per-user isolation coverage.
+- [x] Add menstrual flow-volume tracking and user-defined symptom tags to cycle and daily entries.
+- [x] Add daily energy, weight, and basal-body-temperature tracking with private entry fields and pattern summaries.
+- [x] Add fertility observations: cervical-mucus category, OPK result, DPO display, and optional trying-to-conceive mode.
+- [x] Add cycle regularity analysis, shortest/longest cycles, and a personal prediction range based on cycle variation.
+- [x] Add non-diagnostic pattern alerts for repeated severe pain, unusual flow changes, and persistent cycle-length changes.
+- [ ] Add configurable in-browser reminders for predicted period, cycle/entry logging, and period-product preparation.
+- [ ] Add selectable-period reports with fertility, symptom, mood, temperature, and weight summaries ready for printing as PDF.
+- [x] Add a user-controlled full-account data export and permanent data-deletion flow with explicit confirmation.
+- [ ] Design future-only phases for pregnancy, postpartum, perimenopause, device health integrations, and temporary clinician sharing.

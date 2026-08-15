@@ -29,6 +29,13 @@ describe("Next.js API validation", () => {
     expect(appLockInput.safeParse({ pin: "12ab" }).success).toBe(false);
   });
 
+  it("validates extended private health and fertility observations without accepting unsafe measurement ranges", () => {
+    expect(cycleInput.safeParse({ startDate: "2026-08-01", endDate: "2026-08-05", symptoms: [], flowVolume: "heavy", notes: null }).success).toBe(true);
+    expect(dailyEntryInput.safeParse({ entryDate: "2026-08-14", mood: "neutral", painLevel: 2, symptoms: [], customSymptoms: ["دوخة خفيفة"], energyLevel: 4, weightKg: 62.5, basalTemperature: 36.58, cervicalMucus: "watery", opkResult: "negative", pregnancyTest: "not_taken", notes: null }).success).toBe(true);
+    expect(dailyEntryInput.safeParse({ entryDate: "2026-08-14", mood: "neutral", painLevel: 2, symptoms: [], energyLevel: 6, weightKg: 62.5, basalTemperature: 36.58, cervicalMucus: "watery", opkResult: "negative", pregnancyTest: "not_taken", notes: null }).success).toBe(false);
+    expect(dailyEntryInput.safeParse({ entryDate: "2026-08-14", mood: "neutral", painLevel: 2, symptoms: [], energyLevel: 3, weightKg: 62.5, basalTemperature: 50, cervicalMucus: "watery", opkResult: "negative", pregnancyTest: "not_taken", notes: null }).success).toBe(false);
+  });
+
   it("switches the document language and reading direction for English and Arabic", () => {
     expect(languageDocumentAttributes("en")).toEqual({ lang: "en", dir: "ltr" });
     expect(languageDocumentAttributes("ar")).toEqual({ lang: "ar", dir: "rtl" });
