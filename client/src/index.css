@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: "Alexandria", sans-serif;
+  --font-sans: "Cairo", "Inter", system-ui, sans-serif;
 }
 
 :root {
-  font-family: "Alexandria", sans-serif;
+  font-family: "Cairo", "Inter", system-ui, sans-serif;
   color: #202036;
   background: #fff8fb;
   font-synthesis: none;
+  font-size: 16px;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
+
+:root[lang="en"] { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
-body { margin: 0; min-width: 320px; overflow-x: hidden; }
+body { margin: 0; min-width: 320px; overflow-x: hidden; font-size:1rem; line-height:1.6; text-rendering:optimizeLegibility; }
 button, input, textarea, select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
@@ -175,3 +180,36 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (min-width:720px) { .app-shell { padding:26px 26px 34px; }.bottom-nav { position:sticky; top:12px; bottom:auto; order:-1; border:1px solid var(--line); border-radius:18px; padding:7px; margin-bottom:20px; background:var(--surface); }.bottom-nav-inner { width:100%; grid-template-columns:repeat(6,auto); justify-content:space-around; }.nav-item { flex-direction:row; padding:10px 15px; font-size:.68rem; }.topbar { padding-bottom:24px; }.stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }.main-layout { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr); gap:14px; }.main-layout .section { margin-top:0; }.fertility-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }.guidance-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:370px) { .app-shell { padding-left:10px; padding-right:10px; }.hero { padding:18px; }.symptom-grid { grid-template-columns:1fr; }.calendar-day { font-size:.64rem; }.mood-choice { font-size:.49rem; min-height:61px; }.mood-grid-wide { grid-template-columns:repeat(3,minmax(0,1fr)); }.choice-grid-three { grid-template-columns:1fr; }.bottom-nav { padding-left:8px; padding-right:8px; }.nav-item { font-size:.5rem; }.brand p { max-width:175px; } }
 @media (prefers-reduced-motion: no-preference) { .surface-card, .primary-button, .secondary-button, .theme-button, .calendar-day { transition:transform .18s ease, box-shadow .18s ease, background .18s ease; } .surface-card:hover { transform:translateY(-1px); } }
+
+/* Mobile-first reading scale and touch ergonomics. */
+.tracker-app { font-size:1rem; line-height:1.62; }
+.tracker-app :where(.brand p, .section-header p, .page-card > p, .field-hint, .daily-panel-copy, .ongoing-status p, .record-copy p, .settings-group p, .login-content p, .stealth-card p, .medical-safety p, .pattern-alert p, .guidance-grid ul, .chat-bubble, .empty-state) { font-size:clamp(.76rem, 2.9vw, .88rem); line-height:1.82; }
+.tracker-app :where(.field label, .section-header h2, .page-card h2, .ongoing-status h3, .record-copy h3, .medication-title h3, .settings-group h3) { letter-spacing:0; }
+.tracker-app :where(.primary-button, .secondary-button, .text-button, .theme-button, .profile-choice, .filter-buttons button, .symptom-choice, .mood-choice, .pain-choice, .calendar-day, .nav-item) { touch-action:manipulation; }
+.tracker-app :where(.primary-button, .secondary-button, .theme-button, .profile-choice, .filter-buttons button, .symptom-choice, .calendar-day, .icon-button, .mini-action, .calendar-nav button, .chat-composer button) { min-height:44px; }
+.tracker-app :where(.field input, .field textarea, .field select, .chat-composer input) { font-size:max(.9rem, 16px); line-height:1.55; }
+.tracker-app :where(.field input, .field select, .chat-composer input) { min-height:48px; }
+.tracker-app :where(.field textarea) { min-height:104px; }
+.tracker-app :where(.primary-button, .secondary-button) { padding-inline:18px; font-size:clamp(.78rem, 3vw, .9rem); }
+.tracker-app :where(.mood-choice, .pain-choice, .profile-choice, .theme-button, .symptom-choice) { font-size:clamp(.66rem, 2.7vw, .78rem); }
+.tracker-app :where(.nav-item) { font-size:clamp(.56rem, 2.35vw, .68rem); line-height:1.2; }
+.tracker-app :where(.stat-card strong, .pattern-summary strong, .insight-summary strong) { font-size:clamp(.94rem, 3.5vw, 1.08rem); line-height:1.55; }
+
+@media (max-width:420px) {
+  .app-shell { padding:12px 12px 108px; }
+  .topbar { padding-bottom:16px; }
+  .brand h1 { font-size:1.16rem; }
+  .hero { padding:20px; }
+  .hero h2 { font-size:clamp(1.4rem, 6.3vw, 1.72rem); line-height:1.48; }
+  .hero p { font-size:.88rem; line-height:1.8; }
+  .page-card { padding:17px; }
+  .stat-card { padding:14px; }
+  .bottom-nav { padding-top:8px; }
+  .nav-item { min-height:48px; padding:6px 1px; }
+  .mood-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+
+@media (min-width:720px) {
+  .tracker-app { font-size:1.03rem; }
+  .tracker-app :where(.brand p, .section-header p, .page-card > p, .field-hint, .daily-panel-copy, .ongoing-status p, .record-copy p, .settings-group p, .login-content p, .stealth-card p, .medical-safety p, .pattern-alert p, .guidance-grid ul, .chat-bubble, .empty-state) { font-size:.82rem; }
+}

@@ -101,3 +101,7 @@
 - [ ] Add selectable-period reports with fertility, symptom, mood, temperature, and weight summaries ready for printing as PDF.
 - [x] Add a user-controlled full-account data export and permanent data-deletion flow with explicit confirmation.
 - [ ] Design future-only phases for pregnancy, postpartum, perimenopause, device health integrations, and temporary clinician sharing.
+- [x] Add an Arabic-first and English-compatible responsive typography scale with improved line height and numeral readability.
+- [x] Increase mobile touch-target sizing, field legibility, and action hierarchy without reducing information density.
+- [x] Add responsive font loading and fallback stacks that preserve RTL/LTR readability and performance.
+- [x] Verify the refined typography and mobile controls in the local responsive preview.
