@@ -82,3 +82,9 @@
 - [x] Add user-controlled generation of a concise printable personal health summary.
 - [x] Add validation and account-isolation tests for medication schedules, reminder-state updates, and privacy-lock input.
 - [ ] Deploy and production-validate the medication, reminder, privacy, trend, and report features.
+- [x] Add a persisted Arabic/English language preference for each authenticated account.
+- [x] Extract visible interface copy into Arabic and English translation dictionaries.
+- [x] Switch document language and interface direction automatically between RTL and LTR.
+- [x] Localize date and calendar formatting for Arabic and English.
+- [x] Improve bilingual accessibility labels and direction-aware interface controls.
+- [x] Add automated tests for language selection validation and direction changes.

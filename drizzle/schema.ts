@@ -32,6 +32,7 @@ export const userProfiles = pgTable("user_profiles", {
   relationshipStatus: relationshipStatus("relationship_status").notNull().default("single"),
   pregnancyStatus: pregnancyStatus("pregnancy_status").notNull().default("not_pregnant"),
   theme: appTheme("theme").notNull().default("pink"),
+  language: varchar("language", { length: 5 }).notNull().default("ar"),
   stealthMode: boolean("stealth_mode").notNull().default(false),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
   appLockHash: text("app_lock_hash"),

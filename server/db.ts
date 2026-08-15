@@ -78,7 +78,7 @@ export async function getProfileForUser(userId: number) {
   return (await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).limit(1))[0] ?? null;
 }
 
-export async function saveProfileForUser(userId: number, input: { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: "single" | "married"; pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure"; theme: "light" | "dark" | "pink" | "purple"; stealthMode: boolean; onboardingCompleted: boolean }) {
+export async function saveProfileForUser(userId: number, input: { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: "single" | "married"; pregnancyStatus: "not_pregnant" | "pregnant" | "not_sure"; theme: "light" | "dark" | "pink" | "purple"; language: "ar" | "en"; stealthMode: boolean; onboardingCompleted: boolean }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   const values = { userId, ...input, updatedAt: new Date() };

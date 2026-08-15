@@ -5,6 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, ApiError, useApiCache } from "@/lib/api";
 import { BrowserMedicationReminderController, MedicationPanel } from "@/components/MedicationTools";
+import { LanguageController, type AppLanguage } from "@/components/LanguageController";
 import { AppLockScreen, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { WellnessTrends } from "@/components/WellnessTrends";
@@ -18,7 +19,7 @@ type ThemeName = "light" | "dark" | "pink" | "purple";
 type CycleRow = CycleRecordForStats & { symptoms: string[]; notes: string | null };
 type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; notes: string };
 type ChatMessage = { id: number; role: "assistant" | "user"; text: string };
-type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; stealthMode: number; onboardingCompleted: number };
+type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; stealthMode: number; onboardingCompleted: number };
 type MoodValue = "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious";
 type RelationshipStatus = "single" | "married";
 type PregnancyStatus = "not_pregnant" | "pregnant" | "not_sure";
@@ -47,7 +48,7 @@ const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "م�
 const weekdays = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
 
 const formatDate = (value: string | null) => value
-  ? new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${value}T12:00:00`))
+  ? new Intl.DateTimeFormat(typeof document !== "undefined" && document.documentElement.lang === "en" ? "en-GB" : "ar-EG", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${value}T12:00:00`))
   : "غير متاح";
 
 function emptyRecordForm(): RecordFormState {
@@ -104,6 +105,8 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{ id: 1, role: "assistant", text: "أهلاً بكِ. اسأليني عن متابعة الدورة أو الأعراض أو الخصوبة، وسأقدم إرشادات عامة تعمل دون اتصال." }]);
   const [privacyLocked, setPrivacyLocked] = useState(false);
+  const [, setLocaleTick] = useState(0);
+  const refreshLocaleFormatting = useCallback(() => setLocaleTick(current => current + 1), []);
 
   const profile = profileQuery.data;
   const cycles = (cyclesQuery.data ?? []) as CycleRow[];
@@ -143,7 +146,7 @@ export default function Home() {
     return () => { window.removeEventListener("blur", lock); document.removeEventListener("visibilitychange", onVisibility); };
   }, [appLockQuery.data?.enabled]);
 
-  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; stealthMode: boolean; onboardingCompleted: boolean }>) => {
+  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
     try {
       await saveProfile.mutateAsync({
@@ -153,6 +156,7 @@ export default function Home() {
         relationshipStatus: changes.relationshipStatus ?? profile.relationshipStatus,
         pregnancyStatus: changes.pregnancyStatus ?? profile.pregnancyStatus,
         theme: changes.theme ?? profile.theme,
+        language: changes.language ?? profile.language ?? "ar",
         stealthMode: changes.stealthMode ?? Boolean(profile.stealthMode),
         onboardingCompleted: changes.onboardingCompleted ?? Boolean(profile.onboardingCompleted),
       });
@@ -167,7 +171,7 @@ export default function Home() {
     if (!onboardingName.trim()) return toast.error("اكتبي الاسم الذي تريدين ظهوره في التطبيق.");
     if (onboardingEndDate && onboardingEndDate < onboardingLastPeriod) return toast.error("تاريخ النهاية لا يمكن أن يسبق تاريخ البداية.");
     try {
-      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", stealthMode: false, onboardingCompleted: true });
+      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", language: "ar", stealthMode: false, onboardingCompleted: true });
       await createCycle.mutateAsync({ startDate: onboardingLastPeriod, endDate: onboardingEndDate || null, symptoms: [], notes: "بداية متابعة زُهيرة" });
       await refreshData();
       toast.success("تم تجهيز ملفكِ الخاص بنجاح.");
@@ -276,7 +280,8 @@ export default function Home() {
   const fertileDays = new Set(statistics.fertileStart && statistics.fertileEnd ? daysInRange(statistics.fertileStart, statistics.fertileEnd) : []);
 
   return (
-    <div className="tracker-app" data-theme={profile.theme} dir="rtl">
+    <div className="tracker-app" data-theme={profile.theme} dir={profile.language === "en" ? "ltr" : "rtl"}>
+      <LanguageController language={profile.language ?? "ar"} onApplied={refreshLocaleFormatting} />
       <div className="app-shell">
         <header className="topbar">
           <div className="brand"><div className="brand-mark"><Flower2 size={23} /></div><div><h1>زُهيرة</h1><p>مساحتكِ الخاصة لمتابعة دورتكِ</p></div></div>
@@ -287,7 +292,7 @@ export default function Home() {
         {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={setDeleteDailyTarget} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} /></>}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} /></>}
       </div>
       <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />
       <Navigation active={tab} onChange={setTab} />
@@ -362,7 +367,7 @@ function CalendarTab({ cursor, setCursor, selectedDay, setSelectedDay, periodDay
 
 function ChatTab({ messages, input, setInput, onSubmit }: { messages: ChatMessage[]; input: string; setInput: (value: string) => void; onSubmit: (event: FormEvent) => void }) { return <section className="surface-card page-card"><div className="section-header"><div><h2>مساعد زُهيرة</h2><p>إرشادات عامة تعمل دون اتصال</p></div><MessageCircle size={21} color="var(--accent)" /></div><div className="chat-disclaimer"><CircleHelp size={17} className="shrink-0 mt-0.5" />هذا المساعد ليس أداة طبية ولا يقدّم تشخيصاً أو علاجاً. عند ألم شديد، نزيف غير معتاد، أو قلق مستمر، تواصلي مع مختصة أو اطلبي الرعاية العاجلة.</div><div className="chat-log" aria-live="polite">{messages.map(message => <div key={message.id} className={`chat-bubble ${message.role === "user" ? "user" : ""}`}>{message.text}</div>)}</div><form className="chat-composer" onSubmit={onSubmit}><input value={input} onChange={event => setInput(event.target.value)} placeholder="اكتبي سؤالك هنا..." aria-label="سؤال للمساعد" /><button type="submit" aria-label="إرسال السؤال"><Send size={17} /></button></form></section>; }
 
-function SettingsTab({ name, setName, cycleLength, setCycleLength, profile, latestRecord, onSubmit, onTheme, onStealth, onEditLatest, onLogout, busy }: { name: string; setName: (value: string) => void; cycleLength: number; setCycleLength: (value: number) => void; profile: ProfileData; latestRecord: CycleRow | null; onSubmit: (event: FormEvent) => void; onTheme: (theme: ThemeName) => void; onStealth: () => void; onEditLatest: () => void; onLogout: () => void; busy: boolean }) { return <section className="surface-card page-card"><div><h2>الإعدادات والخصوصية</h2><p>عدّلي بيانات ملفكِ واختاري الشكل الذي يريحكِ.</p></div><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>الاسم المعروض</label><input value={name} onChange={event => setName(event.target.value)} /></div><div className="field"><label>متوسط طول الدورة</label><input type="number" min="20" max="45" value={cycleLength} onChange={event => setCycleLength(Number(event.target.value))} /></div><button className="secondary-button" type="submit" disabled={busy}><UserRound size={16} />حفظ الملف الشخصي</button></form><div className="settings-group"><h3>آخر حيض مسجل</h3><p>{latestRecord ? `بدأ في ${formatDate(latestRecord.startDate)}. يمكنكِ تعديل البداية أو إضافة تاريخ النهاية من هنا.` : "لا يوجد سجل حتى الآن. أضيفي أول يوم لبدء المتابعة."}</p><button className="secondary-button" type="button" onClick={onEditLatest}>{latestRecord ? <><Pencil size={16} />تعديل آخر حيض</> : <><Plus size={16} />إضافة آخر حيض</>}</button></div><div className="settings-group"><h3>ثيم التطبيق</h3><p>اختاري أحد الألوان التالية. يتم حفظ الاختيار في حسابكِ.</p><div className="theme-grid">{themes.map(theme => <button key={theme.value} className={`theme-button ${profile.theme === theme.value ? "selected" : ""}`} onClick={() => onTheme(theme.value)} disabled={busy}><i className={`theme-swatch ${theme.className}`} />{theme.label}</button>)}</div></div><div className="settings-group"><h3>وضع التخفي</h3><p>يعرض شاشة محايدة لا تحتوي على أي تفاصيل عن الدورة أو التطبيق.</p><div className="toggle-row"><div><strong>تفعيل وضع التخفي</strong><span>يمكنكِ العودة إلى التطبيق من الشاشة المحايدة.</span></div><button className="switch" type="button" aria-label="تفعيل وضع التخفي" onClick={onStealth} disabled={busy}><i /></button></div></div><div className="settings-group"><h3>الحساب</h3><p>بياناتكِ محفوظة بشكل منفصل عن باقي المستخدمين.</p><button className="secondary-button" type="button" onClick={onLogout}><LogOut size={16} />تسجيل الخروج</button></div></section>; }
+function SettingsTab({ name, setName, cycleLength, setCycleLength, profile, latestRecord, onSubmit, onTheme, onLanguage, onStealth, onEditLatest, onLogout, busy }: { name: string; setName: (value: string) => void; cycleLength: number; setCycleLength: (value: number) => void; profile: ProfileData; latestRecord: CycleRow | null; onSubmit: (event: FormEvent) => void; onTheme: (theme: ThemeName) => void; onLanguage: (language: AppLanguage) => void; onStealth: () => void; onEditLatest: () => void; onLogout: () => void; busy: boolean }) { return <section className="surface-card page-card"><div><h2>الإعدادات والخصوصية</h2><p>عدّلي بيانات ملفكِ واختاري الشكل الذي يريحكِ.</p></div><form className="form-stack" onSubmit={onSubmit}><div className="field"><label>الاسم المعروض</label><input value={name} onChange={event => setName(event.target.value)} /></div><div className="field"><label>متوسط طول الدورة</label><input type="number" min="20" max="45" value={cycleLength} onChange={event => setCycleLength(Number(event.target.value))} /></div><button className="secondary-button" type="submit" disabled={busy}><UserRound size={16} />حفظ الملف الشخصي</button></form><div className="settings-group"><h3>اللغة</h3><p>اختاري لغة التطبيق واتجاه الواجهة المناسبين لكِ.</p><div className="theme-grid language-grid"><button type="button" className={`theme-button ${profile.language === "ar" ? "selected" : ""}`} onClick={() => onLanguage("ar")} disabled={busy}>العربية</button><button type="button" className={`theme-button ${profile.language === "en" ? "selected" : ""}`} onClick={() => onLanguage("en")} disabled={busy}>الإنجليزية</button></div></div><div className="settings-group"><h3>آخر حيض مسجل</h3><p>{latestRecord ? `بدأ في ${formatDate(latestRecord.startDate)}. يمكنكِ تعديل البداية أو إضافة تاريخ النهاية من هنا.` : "لا يوجد سجل حتى الآن. أضيفي أول يوم لبدء المتابعة."}</p><button className="secondary-button" type="button" onClick={onEditLatest}>{latestRecord ? <><Pencil size={16} />تعديل آخر حيض</> : <><Plus size={16} />إضافة آخر حيض</>}</button></div><div className="settings-group"><h3>ثيم التطبيق</h3><p>اختاري أحد الألوان التالية. يتم حفظ الاختيار في حسابكِ.</p><div className="theme-grid">{themes.map(theme => <button type="button" key={theme.value} className={`theme-button ${profile.theme === theme.value ? "selected" : ""}`} onClick={() => onTheme(theme.value)} disabled={busy}><i className={`theme-swatch ${theme.className}`} />{theme.label}</button>)}</div></div><div className="settings-group"><h3>وضع التخفي</h3><p>يعرض شاشة محايدة لا تحتوي على أي تفاصيل عن الدورة أو التطبيق.</p><div className="toggle-row"><div><strong>تفعيل وضع التخفي</strong><span>يمكنكِ العودة إلى التطبيق من الشاشة المحايدة.</span></div><button className="switch" type="button" aria-label="تفعيل وضع التخفي" onClick={onStealth} disabled={busy}><i /></button></div></div><div className="settings-group"><h3>الحساب</h3><p>بياناتكِ محفوظة بشكل منفصل عن باقي المستخدمين.</p><button className="secondary-button" type="button" onClick={onLogout}><LogOut size={16} />تسجيل الخروج</button></div></section>; }
 
 function Navigation({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) { const items: { id: Tab; label: string; icon: React.ReactNode }[] = [{ id: "home", label: "الرئيسية", icon: <HeartPulse size={18} /> }, { id: "records", label: "السجل", icon: <Droplets size={18} /> }, { id: "calendar", label: "التقويم", icon: <CalendarDays size={18} /> }, { id: "medications", label: "الأدوية", icon: <Pill size={18} /> }, { id: "chat", label: "المساعد", icon: <MessageCircle size={18} /> }, { id: "settings", label: "الإعدادات", icon: <Settings size={18} /> }]; return <nav className="bottom-nav" aria-label="التنقل الرئيسي"><div className="bottom-nav-inner">{items.map(item => <button key={item.id} className={`nav-item ${active === item.id ? "active" : ""}`} onClick={() => onChange(item.id)}>{item.icon}<span>{item.label}</span></button>)}</div></nav>; }
 
