@@ -79,6 +79,24 @@ export async function recordLocalSignIn(userId: number) {
   await db.update(users).set({ lastSignedIn: new Date(), updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
+export async function updateEmailForUser(userId: number, email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const normalized = email.trim().toLowerCase();
+  const existing = await getUserByEmail(normalized);
+  if (existing && existing.id !== userId) throw new Error("ACCOUNT_EXISTS");
+  const updated = await db.update(users).set({ email: normalized, updatedAt: new Date() }).where(eq(users.id, userId)).returning();
+  if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+  return updated[0];
+}
+
+export async function updatePasswordForUser(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const updated = await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId)).returning({ id: users.id });
+  if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+}
+
 export async function getProfileForUser(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");

@@ -115,3 +115,8 @@
 - [x] Increase mobile touch-target sizing, field legibility, and action hierarchy without reducing information density.
 - [x] Add responsive font loading and fallback stacks that preserve RTL/LTR readability and performance.
 - [x] Verify the refined typography and mobile controls in the local responsive preview.
+- [x] Add account-scoped offline mode with a local encrypted queue for daily entries and cycle changes, then synchronize safely when the connection returns.
+- [x] Add a preview-first Notion historical-record import that requires explicit user selection and preserves account isolation.
+- [x] Add authenticated email-address change with current-password confirmation and uniqueness validation.
+- [x] Add a current-password-confirmed password-change flow that never exposes account secrets.
+- [ ] Add a safe logged-out password-reset email flow after configuring an approved transactional email provider and sending domain.

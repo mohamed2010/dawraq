@@ -20,6 +20,8 @@ export const medicationDoseInput = z.object({ doseDate: dateKey, scheduledTime: 
 export const appLockInput = z.object({ pin: z.string().regex(/^\d{4,8}$/).nullable() });
 export const appLockVerifyInput = z.object({ pin: z.string().regex(/^\d{4,8}$/) });
 export const accountDeletionInput = z.object({ confirmation: z.literal("حذف حسابي") });
+export const accountEmailChangeInput = z.object({ email, currentPassword: z.string().min(1).max(128) });
+export const accountPasswordChangeInput = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password });
 export const backupRestoreInput = z.object({
   confirmation: z.literal("استعادة النسخة"),
   backup: z.object({

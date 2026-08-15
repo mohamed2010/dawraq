@@ -8,10 +8,13 @@ import { BrowserMedicationReminderController, MedicationPanel } from "@/componen
 import { CycleGuidancePanel } from "@/components/CycleGuidancePanel";
 import { HealthPatternAlerts } from "@/components/HealthPatternAlerts";
 import { LanguageController, type AppLanguage } from "@/components/LanguageController";
-import { AppLockScreen, ClinicianSharingPanel, DeviceLockPanel, PrivacyToolsPanel } from "@/components/PrivacyTools";
+import { AccountSecurityPanel, AppLockScreen, ClinicianSharingPanel, DeviceLockPanel, PrivacyToolsPanel } from "@/components/PrivacyTools";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { WellnessTrends } from "@/components/WellnessTrends";
 import { AccessibilityPanel, GeneralReminderPanel, LifeStagePanel, ReportsAndBackupPanel } from "@/components/EnhancementTools";
+import { OfflineModeBar } from "@/components/OfflineMode";
+import { NotionImportPanel } from "@/components/NotionImportPanel";
+import { createOfflineOperationId, enqueueOfflineOperation, listOfflineOperations, loadOfflineSnapshot, offlineOperationCount, removeOfflineOperation, saveOfflineSnapshot, type OfflineSnapshot } from "@/lib/offline-store";
 import { addCalendarDays, calculateCycleStatistics, dateKey, daysInRange, type CycleRecordForStats } from "@shared/cycleMath";
 import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, CircleHelp, CloudOff, Droplets, EyeOff, Flower2, HeartPulse, LogIn, LogOut, MessageCircle, Moon, Pencil, Pill, Plus, Send, Settings, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -74,7 +77,7 @@ function replyFor(question: string) {
 }
 
 export default function Home() {
-  const { user, loading, isAuthenticated, logout } = useAuth();
+  const { user, loading, isAuthenticated, refresh: refreshAccount, logout } = useAuth();
   const profileQuery = api.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const cyclesQuery = api.cycles.list.useQuery(undefined, { enabled: isAuthenticated });
   const dailyEntriesQuery = api.dailyEntries.list.useQuery(undefined, { enabled: isAuthenticated });
@@ -112,13 +115,17 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([{ id: 1, role: "assistant", text: "أهلاً بكِ. اسأليني عن متابعة الدورة أو الأعراض أو الخصوبة، وسأقدم إرشادات عامة تعمل دون اتصال." }]);
   const [privacyLocked, setPrivacyLocked] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [offlineSnapshot, setOfflineSnapshot] = useState<OfflineSnapshot | null>(null);
+  const [offlineLoaded, setOfflineLoaded] = useState(false);
+  const [pendingOfflineChanges, setPendingOfflineChanges] = useState(0);
   const [, setLocaleTick] = useState(0);
   const refreshLocaleFormatting = useCallback(() => setLocaleTick(current => current + 1), []);
 
-  const profile = profileQuery.data;
-  const cycles = (cyclesQuery.data ?? []) as CycleRow[];
-  const dailyEntries = (dailyEntriesQuery.data ?? []) as DailyEntryRow[];
-  const medications = medicationsQuery.data ?? [];
+  const profile = profileQuery.data ?? (!online ? offlineSnapshot?.profile ?? null : null);
+  const cycles = (cyclesQuery.data ?? (!online ? offlineSnapshot?.cycles ?? [] : [])) as CycleRow[];
+  const dailyEntries = (dailyEntriesQuery.data ?? (!online ? offlineSnapshot?.dailyEntries ?? [] : [])) as DailyEntryRow[];
+  const medications = medicationsQuery.data ?? (!online ? offlineSnapshot?.medications ?? [] : []);
   const today = dateKey(new Date());
   const statistics = useMemo(() => calculateCycleStatistics(cycles, profile?.averageCycleLength ?? 28, today), [cycles, profile?.averageCycleLength, today]);
   const isBusy = saveProfile.isPending || createCycle.isPending || updateCycle.isPending || deleteCycle.isPending || saveDailyEntry.isPending || deleteDailyEntry.isPending;
@@ -133,12 +140,53 @@ export default function Home() {
   }, [profile]);
 
   useEffect(() => {
+    const updateConnectivity = () => setOnline(navigator.onLine);
+    updateConnectivity();
+    window.addEventListener("online", updateConnectivity);
+    window.addEventListener("offline", updateConnectivity);
+    return () => { window.removeEventListener("online", updateConnectivity); window.removeEventListener("offline", updateConnectivity); };
+  }, []);
+
+  useEffect(() => {
+    if (!user) { setOfflineSnapshot(null); setOfflineLoaded(true); setPendingOfflineChanges(0); return; }
+    setOfflineLoaded(false);
+    void Promise.all([loadOfflineSnapshot(user.id), offlineOperationCount(user.id)]).then(([snapshot, count]) => { setOfflineSnapshot(snapshot); setPendingOfflineChanges(count); }).catch(() => undefined).finally(() => setOfflineLoaded(true));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !profile || !cyclesQuery.data || !dailyEntriesQuery.data || !medicationsQuery.data) return;
+    void saveOfflineSnapshot(user.id, { profile, cycles: cyclesQuery.data, dailyEntries: dailyEntriesQuery.data, medications: medicationsQuery.data, savedAt: new Date().toISOString() }).catch(() => undefined);
+  }, [user?.id, profile, cyclesQuery.data, dailyEntriesQuery.data, medicationsQuery.data]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = profile?.theme ?? "pink";
   }, [profile?.theme]);
 
   const refreshData = async () => {
+    if (!online) return;
     await Promise.all([profileQuery.refetch(), cyclesQuery.refetch(), dailyEntriesQuery.refetch(), medicationsQuery.refetch(), appLockQuery.refetch(), deviceLockQuery.refetch()]);
   };
+  const syncOfflineChanges = useCallback(async () => {
+    if (!user || !online) return;
+    const operations = await listOfflineOperations(user.id);
+    if (!operations.length) return;
+    for (const operation of operations) {
+      try {
+        if (operation.resource === "cycle" && operation.action === "create") await createCycle.mutateAsync(operation.payload);
+        if (operation.resource === "cycle" && operation.action === "update") await updateCycle.mutateAsync(operation.payload);
+        if (operation.resource === "cycle" && operation.action === "delete") await deleteCycle.mutateAsync(operation.payload);
+        if (operation.resource === "daily-entry" && operation.action === "save") await saveDailyEntry.mutateAsync(operation.payload);
+        if (operation.resource === "daily-entry" && operation.action === "delete") await deleteDailyEntry.mutateAsync(operation.payload);
+        await removeOfflineOperation(operation.id);
+      } catch (error) {
+        toast.error(error instanceof Error ? `توقفت مزامنة تغيير محلي: ${error.message}` : "توقفت مزامنة تغيير محلي. لم يتم حذفه.");
+        break;
+      }
+    }
+    const count = await offlineOperationCount(user.id);
+    setPendingOfflineChanges(count);
+    if (!count) { await refreshData(); toast.success("تمت مزامنة تغييراتكِ المحلية."); }
+  }, [user?.id, online, createCycle, updateCycle, deleteCycle, saveDailyEntry, deleteDailyEntry]);
   const confirmReminderDose = useCallback(async (id: number, scheduledTime: string) => {
     await takeMedicationDose.mutateAsync({ id, doseDate: dateKey(new Date()), scheduledTime });
     toast.success("تم تسجيل الجرعة لهذا الوقت.");
@@ -203,6 +251,16 @@ export default function Home() {
     if (recordForm.endDate && recordForm.endDate < recordForm.startDate) return toast.error("تاريخ النهاية لا يمكن أن يسبق البداية.");
     try {
       const payload = { startDate: recordForm.startDate, endDate: recordForm.endDate || null, symptoms: recordForm.symptoms, flowVolume: recordForm.flowVolume, notes: recordForm.notes.trim() || null };
+      if (!online && user) {
+        const temporaryId = recordForm.id ?? -Date.now();
+        const operation = recordForm.id ? { id: createOfflineOperationId(), accountId: user.id, resource: "cycle" as const, action: "update" as const, payload: { id: recordForm.id, ...payload }, createdAt: new Date().toISOString() } : { id: createOfflineOperationId(), accountId: user.id, resource: "cycle" as const, action: "create" as const, payload, createdAt: new Date().toISOString() };
+        await enqueueOfflineOperation(operation);
+        setOfflineSnapshot(current => current ? { ...current, cycles: recordForm.id ? current.cycles.map(item => item.id === recordForm.id ? { ...item, ...payload, symptomsJson: JSON.stringify(payload.symptoms) } : item) : [{ id: temporaryId, userId: user.id, ...payload, symptomsJson: JSON.stringify(payload.symptoms) }, ...current.cycles], savedAt: new Date().toISOString() } : current);
+        setPendingOfflineChanges(await offlineOperationCount(user.id));
+        setRecordOpen(false);
+        toast.success("تم حفظ سجل الدورة محلياً وسيُرسل عند عودة الاتصال.");
+        return;
+      }
       if (recordForm.id) await updateCycle.mutateAsync({ id: recordForm.id, ...payload });
       else await createCycle.mutateAsync(payload);
       setRecordOpen(false);
@@ -215,6 +273,14 @@ export default function Home() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      if (!online && user) {
+        if (deleteTarget.id > 0) await enqueueOfflineOperation({ id: createOfflineOperationId(), accountId: user.id, resource: "cycle", action: "delete", payload: { id: deleteTarget.id }, createdAt: new Date().toISOString() });
+        setOfflineSnapshot(current => current ? { ...current, cycles: current.cycles.filter(item => item.id !== deleteTarget.id), savedAt: new Date().toISOString() } : current);
+        setPendingOfflineChanges(await offlineOperationCount(user.id));
+        setDeleteTarget(null);
+        toast.success("تم الحذف محلياً وسيُرسل عند عودة الاتصال.");
+        return;
+      }
       await deleteCycle.mutateAsync({ id: deleteTarget.id });
       setDeleteTarget(null);
       await cyclesQuery.refetch();
@@ -232,7 +298,18 @@ export default function Home() {
   const saveDaily = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await saveDailyEntry.mutateAsync({ ...dailyForm, notes: dailyForm.notes.trim() || null });
+      const { id: _dailyEntryId, ...dailyPayload } = dailyForm;
+      const payload = { ...dailyPayload, notes: dailyForm.notes.trim() || null };
+      if (!online && user) {
+        await enqueueOfflineOperation({ id: createOfflineOperationId(), accountId: user.id, resource: "daily-entry", action: "save", payload, createdAt: new Date().toISOString() });
+        const temporaryId = dailyForm.id ?? -Date.now();
+        setOfflineSnapshot(current => current ? { ...current, dailyEntries: current.dailyEntries.some(item => item.entryDate === payload.entryDate) ? current.dailyEntries.map(item => item.entryDate === payload.entryDate ? { ...item, ...payload, symptomsJson: JSON.stringify(payload.symptoms) } : item) : [{ id: temporaryId, userId: user.id, ...payload, symptomsJson: JSON.stringify(payload.symptoms) }, ...current.dailyEntries], savedAt: new Date().toISOString() } : current);
+        setPendingOfflineChanges(await offlineOperationCount(user.id));
+        setDailyOpen(false);
+        toast.success("تم حفظ متابعة اليوم محلياً وسيُرسل عند عودة الاتصال.");
+        return;
+      }
+      await saveDailyEntry.mutateAsync(payload);
       setDailyOpen(false);
       await dailyEntriesQuery.refetch();
       toast.success(dailyForm.id ? "تم تعديل متابعة اليوم." : "تم حفظ متابعة اليوم.");
@@ -243,7 +320,16 @@ export default function Home() {
   const saveDailyFromPanel = async (input: { entryDate: string; mood: MoodValue; painLevel: number; symptoms: string[]; notes: string | null }) => {
     try {
       const existing = dailyEntries.find(entry => entry.entryDate === input.entryDate);
-      await saveDailyEntry.mutateAsync({ ...input, customSymptoms: existing?.customSymptoms ?? [], energyLevel: existing?.energyLevel ?? 3, weightKg: existing?.weightKg ?? null, basalTemperature: existing?.basalTemperature ?? null, cervicalMucus: existing?.cervicalMucus ?? "not_observed", opkResult: existing?.opkResult ?? "not_taken", pregnancyTest: existing?.pregnancyTest ?? "not_taken" });
+      const payload = { ...input, customSymptoms: existing?.customSymptoms ?? [], energyLevel: existing?.energyLevel ?? 3, weightKg: existing?.weightKg ?? null, basalTemperature: existing?.basalTemperature ?? null, cervicalMucus: existing?.cervicalMucus ?? "not_observed", opkResult: existing?.opkResult ?? "not_taken", pregnancyTest: existing?.pregnancyTest ?? "not_taken" };
+      if (!online && user) {
+        await enqueueOfflineOperation({ id: createOfflineOperationId(), accountId: user.id, resource: "daily-entry", action: "save", payload, createdAt: new Date().toISOString() });
+        const temporaryId = existing?.id ?? -Date.now();
+        setOfflineSnapshot(current => current ? { ...current, dailyEntries: current.dailyEntries.some(item => item.entryDate === payload.entryDate) ? current.dailyEntries.map(item => item.entryDate === payload.entryDate ? { ...item, ...payload, symptomsJson: JSON.stringify(payload.symptoms) } : item) : [{ id: temporaryId, userId: user.id, ...payload, symptomsJson: JSON.stringify(payload.symptoms) }, ...current.dailyEntries], savedAt: new Date().toISOString() } : current);
+        setPendingOfflineChanges(await offlineOperationCount(user.id));
+        toast.success("تم حفظ متابعة اليوم محلياً وسيُرسل عند عودة الاتصال.");
+        return;
+      }
+      await saveDailyEntry.mutateAsync(payload);
       await dailyEntriesQuery.refetch();
       toast.success("تم حفظ متابعة اليوم.");
     } catch (error) {
@@ -253,6 +339,14 @@ export default function Home() {
   const confirmDeleteDaily = async () => {
     if (!deleteDailyTarget) return;
     try {
+      if (!online && user) {
+        if (deleteDailyTarget.id > 0) await enqueueOfflineOperation({ id: createOfflineOperationId(), accountId: user.id, resource: "daily-entry", action: "delete", payload: { id: deleteDailyTarget.id }, createdAt: new Date().toISOString() });
+        setOfflineSnapshot(current => current ? { ...current, dailyEntries: current.dailyEntries.filter(item => item.id !== deleteDailyTarget.id), savedAt: new Date().toISOString() } : current);
+        setPendingOfflineChanges(await offlineOperationCount(user.id));
+        setDeleteDailyTarget(null);
+        toast.success("تم الحذف محلياً وسيُرسل عند عودة الاتصال.");
+        return;
+      }
       await deleteDailyEntry.mutateAsync({ id: deleteDailyTarget.id });
       setDeleteDailyTarget(null);
       await dailyEntriesQuery.refetch();
@@ -275,11 +369,11 @@ export default function Home() {
     setChatInput("");
   };
 
-  if (isAuthenticated && (loading || profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading || medicationsQuery.isLoading || appLockQuery.isLoading)) {
+  if (isAuthenticated && (loading || ((!offlineLoaded || !offlineSnapshot) && (profileQuery.isLoading || cyclesQuery.isLoading || dailyEntriesQuery.isLoading || medicationsQuery.isLoading)) || (online && appLockQuery.isLoading))) {
     return <div className="tracker-app loading-screen"><Activity className="animate-pulse" size={30} /></div>;
   }
   if (!isAuthenticated) return <LoginPage />;
-  if (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError || medicationsQuery.isError || appLockQuery.isError) return <ProtectedDataError onRetry={refreshData} />;
+  if ((!offlineSnapshot && offlineLoaded && (profileQuery.isError || cyclesQuery.isError || dailyEntriesQuery.isError || medicationsQuery.isError)) || (online && appLockQuery.isError)) return <ProtectedDataError onRetry={refreshData} />;
   if (!profile?.onboardingCompleted) return <OnboardingPage onSubmit={finishOnboarding} name={onboardingName} setName={setOnboardingName} cycleLength={onboardingCycleLength} setCycleLength={setOnboardingCycleLength} lastPeriod={onboardingLastPeriod} setLastPeriod={setOnboardingLastPeriod} endDate={onboardingEndDate} setEndDate={setOnboardingEndDate} busy={isBusy} />;
   if (profile.stealthMode) return <StealthPage onReturn={() => saveCurrentProfile({ stealthMode: false })} busy={isBusy} />;
   if (privacyLocked && (appLockQuery.data?.enabled || deviceLockQuery.data?.enabled)) return <AppLockScreen onUnlock={() => setPrivacyLocked(false)} pinEnabled={Boolean(appLockQuery.data?.enabled)} />;
@@ -296,12 +390,13 @@ export default function Home() {
           <div className="brand"><div className="brand-mark"><Flower2 size={23} /></div><div><h1>زُهيرة</h1><p>مساحتكِ الخاصة لمتابعة دورتكِ</p></div></div>
           <button className="icon-button" aria-label="فتح الإعدادات" onClick={() => setTab("settings")}><Settings size={19} /></button>
         </header>
+        <OfflineModeBar pendingChanges={pendingOfflineChanges} onSynchronize={syncOfflineChanges} />
         {tab === "home" && <><HomeTab profileName={profile.displayName} statistics={statistics} ongoingRecord={ongoingRecord} onAdd={openNewRecord} onCloseOngoing={closeOngoingRecord} onRecords={() => setTab("records")} /><CycleGuidancePanel statistics={statistics} today={today} dailyEntry={dailyEntries.find(entry => entry.entryDate === today) ?? null} tryingToConceive={profile.tryingToConceive} /><HealthPatternAlerts statistics={statistics} cycles={cycles} dailyEntries={dailyEntries} /></>}
         {tab === "records" && <RecordsTab cycles={cycles} onAdd={openNewRecord} onEdit={openEditRecord} onDelete={setDeleteTarget} onCloseOngoing={closeOngoingRecord} />}
         {tab === "calendar" && <><CalendarTab cursor={monthCursor} setCursor={setMonthCursor} selectedDay={selectedDay} setSelectedDay={setSelectedDay} periodDays={periodDays} fertileDays={fertileDays} cycles={cycles} dailyEntries={dailyEntries} today={today} /><DailyHealthPanel entryDate={selectedDay} entry={dailyEntries.find(item => item.entryDate === selectedDay) ?? null} onSave={saveDailyFromPanel} onDelete={entry => setDeleteDailyTarget(entry as DailyEntryRow)} busy={isBusy} /><ReferenceStatsPanel cycles={cycles} dailyEntries={dailyEntries} /><WellnessTrends dailyEntries={dailyEntries} /></>}
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
-        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /><LifeStagePanel userId={user!.id} /><ReportsAndBackupPanel /><DeviceLockPanel /><ClinicianSharingPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /></>}
+        {tab === "settings" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /><LifeStagePanel userId={user!.id} /><ReportsAndBackupPanel /><NotionImportPanel cycles={cycles} onImported={cyclesQuery.refetch} /><AccountSecurityPanel email={user!.email} onEmailChanged={refreshAccount} /><DeviceLockPanel /><ClinicianSharingPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /></>}
       </div>
       <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />
       <Navigation active={tab} onChange={setTab} />

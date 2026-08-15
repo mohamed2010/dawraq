@@ -1,0 +1,10 @@
+{
+  "name": "زُهيرة",
+  "short_name": "زُهيرة",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8fb",
+  "theme_color": "#ed3f73",
+  "lang": "ar",
+  "dir": "rtl"
+}

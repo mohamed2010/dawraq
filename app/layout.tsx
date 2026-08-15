@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "زُهيرة أونلاين",
   description: "متابعة خاصة وآمنة للدورة الشهرية والأعراض.",
   applicationName: "زُهيرة",
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = { themeColor: "#ed3f73" };
