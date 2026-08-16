@@ -9,6 +9,6 @@ describe("mobile typography scale", () => {
     expect(css).toContain(':root[data-text-scale="large"] { font-size:20px; }');
     expect(css).toContain(':root[data-text-scale="extra"] { font-size:22px; }');
     expect(css).toContain("font-size:clamp(.84rem, 3.35vw, 1rem)");
-    expect(css).toContain("font-size:clamp(.66rem, 2.75vw, .78rem)");
+    expect(css).toContain("font-size:clamp(.72rem, 3vw, .84rem)");
   });
 });
