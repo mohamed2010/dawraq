@@ -159,3 +159,6 @@
 - [x] Add user-controlled health-integration consent records with explicit platform scope, revocation, and deletion controls.
 - [x] Add a monthly GitHub Actions security workflow running audit, type checks, tests, and production builds.
 - [x] Add a deployment smoke-test script that validates public health and unauthenticated access controls without user data.
+- [x] Increase the Arabic mobile typography baseline and line-height for readable dashboard cards, guidance, and bottom navigation.
+- [x] Add a per-account font-size preference with normal, large, and extra-large options saved with user preferences.
+- [x] Add a responsive font-size control in settings and verify it on the supplied mobile viewport.

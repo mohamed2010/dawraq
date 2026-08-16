@@ -61,6 +61,7 @@ export const userProfiles = pgTable("user_profiles", {
   pregnancyStatus: pregnancyStatus("pregnancy_status").notNull().default("not_pregnant"),
   theme: appTheme("theme").notNull().default("pink"),
   language: varchar("language", { length: 5 }).notNull().default("ar"),
+  fontScale: varchar("font_scale", { length: 12 }).notNull().default("normal"),
   tryingToConceive: boolean("trying_to_conceive").notNull().default(false),
   stealthMode: boolean("stealth_mode").notNull().default(false),
   onboardingCompleted: boolean("onboarding_completed").notNull().default(false),

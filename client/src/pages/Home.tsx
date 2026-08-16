@@ -28,7 +28,7 @@ type FlowVolume = "light" | "medium" | "heavy";
 type CycleRow = CycleRecordForStats & { symptoms: string[]; flowVolume: FlowVolume; notes: string | null };
 type RecordFormState = { id: number | null; startDate: string; endDate: string; symptoms: string[]; flowVolume: FlowVolume; notes: string };
 type ChatMessage = { id: number; role: "assistant" | "user"; text: string };
-type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; tryingToConceive: boolean; stealthMode: number; onboardingCompleted: number };
+type ProfileData = { displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; fontScale: "normal" | "large" | "extra"; tryingToConceive: boolean; stealthMode: number; onboardingCompleted: number };
 type MoodValue = "very_low" | "low" | "neutral" | "good" | "great" | "irritable" | "anxious";
 type RelationshipStatus = "single" | "married";
 type PregnancyStatus = "not_pregnant" | "pregnant" | "not_sure";
@@ -212,7 +212,12 @@ export default function Home() {
     return () => { window.removeEventListener("blur", lock); document.removeEventListener("visibilitychange", onVisibility); };
   }, [appLockQuery.data?.enabled, deviceLockQuery.data?.enabled]);
 
-  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean }>) => {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.textScale = profile?.fontScale ?? "normal";
+  }, [profile?.fontScale]);
+
+  const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; fontScale: "normal" | "large" | "extra"; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean }>) => {
     if (!profile) return;
     try {
       await saveProfile.mutateAsync({
@@ -223,6 +228,7 @@ export default function Home() {
         pregnancyStatus: changes.pregnancyStatus ?? profile.pregnancyStatus,
         theme: changes.theme ?? profile.theme,
         language: changes.language ?? profile.language ?? "ar",
+        fontScale: changes.fontScale ?? profile.fontScale ?? "normal",
         tryingToConceive: changes.tryingToConceive ?? Boolean(profile.tryingToConceive),
         stealthMode: changes.stealthMode ?? Boolean(profile.stealthMode),
         onboardingCompleted: changes.onboardingCompleted ?? Boolean(profile.onboardingCompleted),
@@ -238,7 +244,7 @@ export default function Home() {
     if (!onboardingName.trim()) return toast.error("اكتبي الاسم الذي تريدين ظهوره في التطبيق.");
     if (onboardingEndDate && onboardingEndDate < onboardingLastPeriod) return toast.error("تاريخ النهاية لا يمكن أن يسبق تاريخ البداية.");
     try {
-      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", language: "ar", tryingToConceive: false, stealthMode: false, onboardingCompleted: true });
+      await saveProfile.mutateAsync({ displayName: onboardingName.trim(), averageCycleLength: onboardingCycleLength, typicalBleedingDays: onboardingBleedingDays, relationshipStatus: onboardingRelationship, pregnancyStatus: onboardingPregnancy, theme: "pink", language: "ar", fontScale: "normal", tryingToConceive: false, stealthMode: false, onboardingCompleted: true });
       await createCycle.mutateAsync({ startDate: onboardingLastPeriod, endDate: onboardingEndDate || null, symptoms: [], flowVolume: "medium", notes: "بداية متابعة زُهيرة" });
       await refreshData();
       toast.success("تم تجهيز ملفكِ الخاص بنجاح.");
@@ -409,7 +415,7 @@ export default function Home() {
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
         {tab === "settings" && <SettingsWorkspace active={settingsSection} onChange={setSettingsSection}>
           {settingsSection === "profile" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} compact /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /></>}
-          {settingsSection === "preferences" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} preferencesOnly /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /></>}
+          {settingsSection === "preferences" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} preferencesOnly /><AccessibilityPanel userId={user!.id} accountFontScale={profile.fontScale} onFontScale={fontScale => void saveCurrentProfile({ fontScale })} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /></>}
           {settingsSection === "wellbeing" && <LifeStagePanel userId={user!.id} />}
           {settingsSection === "data" && <><ReportsAndBackupPanel /><NotionImportPanel cycles={cycles} onImported={cyclesQuery.refetch} /></>}
           {settingsSection === "security" && <><AccountSecurityPanel email={user!.email} onEmailChanged={refreshAccount} /><DeviceLockPanel /><ClinicianSharingPanel /><HealthIntegrationConsentPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /><section className="surface-card page-card settings-logout-card"><h2>تسجيل الخروج</h2><p>أنهي جلستكِ الحالية بأمان على هذا الجهاز.</p><button className="secondary-button" type="button" onClick={logout}><LogOut size={16} />تسجيل الخروج</button></section></>}

@@ -9,12 +9,14 @@
   color: #202036;
   background: #fff8fb;
   font-synthesis: none;
-  font-size: 16px;
+  font-size: 18px;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
 }
 
 :root[lang="en"] { font-family: "Inter", "Cairo", system-ui, sans-serif; }
+:root[data-text-scale="large"] { font-size:20px; }
+:root[data-text-scale="extra"] { font-size:22px; }
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
@@ -191,7 +193,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 /* Mobile-first reading scale and touch ergonomics. */
 .tracker-app { font-size:1rem; line-height:1.62; }
-.tracker-app :where(.brand p, .section-header p, .page-card > p, .field-hint, .daily-panel-copy, .ongoing-status p, .record-copy p, .settings-group p, .login-content p, .stealth-card p, .medical-safety p, .pattern-alert p, .guidance-grid ul, .chat-bubble, .empty-state) { font-size:clamp(.76rem, 2.9vw, .88rem); line-height:1.82; }
+.tracker-app :where(.brand p, .section-header p, .page-card > p, .field-hint, .daily-panel-copy, .ongoing-status p, .record-copy p, .settings-group p, .login-content p, .stealth-card p, .medical-safety p, .pattern-alert p, .guidance-grid ul, .chat-bubble, .empty-state) { font-size:clamp(.84rem, 3.35vw, 1rem); line-height:1.9; }
 .tracker-app :where(.field label, .section-header h2, .page-card h2, .ongoing-status h3, .record-copy h3, .medication-title h3, .settings-group h3) { letter-spacing:0; }
 .tracker-app :where(.primary-button, .secondary-button, .text-button, .theme-button, .profile-choice, .filter-buttons button, .symptom-choice, .mood-choice, .pain-choice, .calendar-day, .nav-item) { touch-action:manipulation; }
 .tracker-app :where(.primary-button, .secondary-button, .theme-button, .profile-choice, .filter-buttons button, .symptom-choice, .calendar-day, .icon-button, .mini-action, .calendar-nav button, .chat-composer button) { min-height:44px; }
@@ -200,7 +202,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .tracker-app :where(.field textarea) { min-height:104px; }
 .tracker-app :where(.primary-button, .secondary-button) { padding-inline:18px; font-size:clamp(.78rem, 3vw, .9rem); }
 .tracker-app :where(.mood-choice, .pain-choice, .profile-choice, .theme-button, .symptom-choice) { font-size:clamp(.66rem, 2.7vw, .78rem); }
-.tracker-app :where(.nav-item) { font-size:clamp(.56rem, 2.35vw, .68rem); line-height:1.2; }
+.tracker-app :where(.nav-item) { font-size:clamp(.66rem, 2.75vw, .78rem); line-height:1.3; }
 .tracker-app :where(.stat-card strong, .pattern-summary strong, .insight-summary strong) { font-size:clamp(.94rem, 3.5vw, 1.08rem); line-height:1.55; }
 
 @media (max-width:420px) {
