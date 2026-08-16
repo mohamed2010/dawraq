@@ -218,7 +218,7 @@ export default function Home() {
   }, [profile?.fontScale]);
 
   const saveCurrentProfile = async (changes: Partial<{ displayName: string; averageCycleLength: number; typicalBleedingDays: number; relationshipStatus: RelationshipStatus; pregnancyStatus: PregnancyStatus; theme: ThemeName; language: AppLanguage; fontScale: "normal" | "large" | "extra"; tryingToConceive: boolean; stealthMode: boolean; onboardingCompleted: boolean }>) => {
-    if (!profile) return;
+    if (!profile) return false;
     try {
       await saveProfile.mutateAsync({
         displayName: changes.displayName ?? profile.displayName,
@@ -234,8 +234,10 @@ export default function Home() {
         onboardingCompleted: changes.onboardingCompleted ?? Boolean(profile.onboardingCompleted),
       });
       await profileQuery.refetch();
+      return true;
     } catch {
       toast.error("تعذر حفظ الإعدادات الآن.");
+      return false;
     }
   };
 
@@ -414,8 +416,8 @@ export default function Home() {
         {tab === "medications" && <MedicationPanel medications={medications} onRefresh={medicationsQuery.refetch} />}
         {tab === "chat" && <ChatTab messages={chatMessages} input={chatInput} setInput={setChatInput} onSubmit={sendChat} />}
         {tab === "settings" && <SettingsWorkspace active={settingsSection} onChange={setSettingsSection}>
-          {settingsSection === "profile" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} compact /><ProfileHealthPanel profile={profile} onSave={saveCurrentProfile} busy={isBusy} /></>}
-          {settingsSection === "preferences" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} preferencesOnly /><AccessibilityPanel userId={user!.id} accountFontScale={profile.fontScale} onFontScale={fontScale => void saveCurrentProfile({ fontScale })} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /></>}
+          {settingsSection === "profile" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} compact /><ProfileHealthPanel profile={profile} onSave={async changes => { await saveCurrentProfile(changes); }} busy={isBusy} /></>}
+          {settingsSection === "preferences" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} preferencesOnly /><AccessibilityPanel userId={user!.id} accountFontScale={profile.fontScale} onFontScale={fontScale => saveCurrentProfile({ fontScale })} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /></>}
           {settingsSection === "wellbeing" && <LifeStagePanel userId={user!.id} />}
           {settingsSection === "data" && <><ReportsAndBackupPanel /><NotionImportPanel cycles={cycles} onImported={cyclesQuery.refetch} /></>}
           {settingsSection === "security" && <><AccountSecurityPanel email={user!.email} onEmailChanged={refreshAccount} /><DeviceLockPanel /><ClinicianSharingPanel /><HealthIntegrationConsentPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /><section className="surface-card page-card settings-logout-card"><h2>تسجيل الخروج</h2><p>أنهي جلستكِ الحالية بأمان على هذا الجهاز.</p><button className="secondary-button" type="button" onClick={logout}><LogOut size={16} />تسجيل الخروج</button></section></>}

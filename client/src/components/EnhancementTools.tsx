@@ -14,20 +14,33 @@ function saveDownload(name: string, value: BlobPart, type: string) {
   const link = document.createElement("a"); link.href = url; link.download = name; link.click(); URL.revokeObjectURL(url);
 }
 
-export function AccessibilityPanel({ userId, accountFontScale = "normal", onFontScale }: { userId: number; accountFontScale?: "normal" | "large" | "extra"; onFontScale?: (fontScale: "normal" | "large" | "extra") => void }) {
+export function AccessibilityPanel({ userId, accountFontScale = "normal", onFontScale }: { userId: number; accountFontScale?: "normal" | "large" | "extra"; onFontScale?: (fontScale: "normal" | "large" | "extra") => Promise<boolean> | boolean | void }) {
   const key = `zuhaira-accessibility:${userId}`;
   const [fontScale, setFontScale] = useState<"normal" | "large" | "extra">("normal");
+  const [savedFontScale, setSavedFontScale] = useState<"normal" | "large" | "extra">("normal");
+  const [savingFontScale, setSavingFontScale] = useState(false);
   const [contrast, setContrast] = useState(false);
   useEffect(() => {
     const stored = localStorage.getItem(key); const settings = stored ? JSON.parse(stored) as { contrast?: boolean } : {};
-    setFontScale(accountFontScale); setContrast(Boolean(settings.contrast));
+    setFontScale(accountFontScale); setSavedFontScale(accountFontScale); setContrast(Boolean(settings.contrast));
   }, [accountFontScale, key]);
   useEffect(() => {
-    document.documentElement.dataset.textScale = fontScale; document.documentElement.dataset.contrast = contrast ? "high" : "normal";
+    document.documentElement.dataset.contrast = contrast ? "high" : "normal";
     localStorage.setItem(key, JSON.stringify({ contrast }));
   }, [contrast, key]);
-  const selectFontScale = (value: "normal" | "large" | "extra") => { setFontScale(value); onFontScale?.(value); };
-  return <section className="surface-card page-card enhancement-panel"><div className="section-header"><div><h2>سهولة القراءة</h2><p>اختاري حجماً مريحاً للنص. يُحفظ اختيار الحجم في حسابكِ، بينما التباين يطبق على هذا الجهاز فقط.</p></div><Type size={21} color="var(--accent)" /></div><div className="field"><label>حجم النص</label><div className="choice-grid choice-grid-three">{(["normal", "large", "extra"] as const).map(value => <button className={fontScale === value ? "profile-choice selected" : "profile-choice"} type="button" key={value} aria-pressed={fontScale === value} onClick={() => selectFontScale(value)}>{value === "normal" ? "مريح" : value === "large" ? "كبير" : "كبير جداً"}</button>)}</div></div><label className="toggle-row"><div><strong>تباين مرتفع</strong><span>يزيد الفرق بين النص والخلفية لتسهيل القراءة.</span></div><button type="button" className={`switch ${contrast ? "on" : ""}`} aria-label="تفعيل التباين المرتفع" onClick={() => setContrast(current => !current)}><i /></button></label></section>;
+  useEffect(() => { document.documentElement.dataset.textScale = fontScale; }, [fontScale]);
+  const selectFontScale = (value: "normal" | "large" | "extra") => { setFontScale(value); };
+  const saveFontScale = async () => {
+    setSavingFontScale(true);
+    try {
+      const result = await onFontScale?.(fontScale);
+      if (result === false) return;
+      setSavedFontScale(fontScale);
+      toast.success("تم حفظ حجم الخط في حسابكِ.");
+    } finally { setSavingFontScale(false); }
+  };
+  const hasUnsavedFontScale = fontScale !== savedFontScale;
+  return <section className="surface-card page-card enhancement-panel"><div className="section-header"><div><h2>سهولة القراءة</h2><p>اختاري الحجم المناسب كمعاينة، ثم اضغطي حفظ حجم الخط ليُحفظ في حسابكِ. التباين يطبق على هذا الجهاز فقط.</p></div><Type size={21} color="var(--accent)" /></div><div className="field"><label>حجم النص</label><div className="choice-grid choice-grid-three">{(["normal", "large", "extra"] as const).map(value => <button className={fontScale === value ? "profile-choice selected" : "profile-choice"} type="button" key={value} aria-pressed={fontScale === value} onClick={() => selectFontScale(value)}>{value === "normal" ? "مريح" : value === "large" ? "كبير" : "كبير جداً"}</button>)}</div><div className="font-scale-save-row"><span role="status" className={hasUnsavedFontScale ? "font-scale-status pending" : "font-scale-status"}>{hasUnsavedFontScale ? "تغيير غير محفوظ" : "تم الحفظ في حسابكِ"}</span><button className="primary-button font-scale-save" type="button" disabled={!hasUnsavedFontScale || savingFontScale} onClick={() => void saveFontScale()}>{savingFontScale ? "جارٍ الحفظ…" : "حفظ حجم الخط"}</button></div></div><label className="toggle-row"><div><strong>تباين مرتفع</strong><span>يزيد الفرق بين النص والخلفية لتسهيل القراءة.</span></div><button type="button" className={`switch ${contrast ? "on" : ""}`} aria-label="تفعيل التباين المرتفع" onClick={() => setContrast(current => !current)}><i /></button></label></section>;
 }
 
 export function GeneralReminderPanel({ userId, nextPeriodStart }: { userId: number; nextPeriodStart: string | null }) {

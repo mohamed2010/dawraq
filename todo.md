@@ -162,3 +162,4 @@
 - [x] Increase the Arabic mobile typography baseline and line-height for readable dashboard cards, guidance, and bottom navigation.
 - [x] Add a per-account font-size preference with normal, large, and extra-large options saved with user preferences.
 - [x] Add a responsive font-size control in settings and verify it on the supplied mobile viewport.
+- [x] Add an explicit save button, unsaved-change state, and success feedback for the account font-size preference.
