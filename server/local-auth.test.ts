@@ -18,6 +18,7 @@ const user = {
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   lastSignedIn: new Date("2026-01-01T00:00:00.000Z"),
+  sessionVersion: 1,
 };
 
 describe("local account security", () => {
@@ -48,6 +49,14 @@ describe("local account security", () => {
 
   it("rejects a session when the matching local account no longer exists", async () => {
     getUserById.mockResolvedValue(null);
+    const token = await createLocalSession(user);
+    const request = new Request("https://example.test/api/profile", { headers: { cookie: `app_session_id=${token}` } });
+
+    await expect(getAuthenticatedUser(request)).rejects.toBeInstanceOf(AuthenticationError);
+  });
+
+  it("invalidates an older session after the account session version changes", async () => {
+    getUserById.mockResolvedValue({ ...user, sessionVersion: 2 });
     const token = await createLocalSession(user);
     const request = new Request("https://example.test/api/profile", { headers: { cookie: `app_session_id=${token}` } });
 

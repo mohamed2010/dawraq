@@ -1,8 +1,13 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { clinicianShareReports, cycleRecords, dailyEntries, devicePasskeys, InsertUser, medicationDoseLogs, medications, userProfiles, users, webauthnChallenges } from "../drizzle/schema";
+import { authRateLimits, clinicianShareReports, cycleRecords, dailyEntries, devicePasskeys, healthIntegrationConsents, InsertUser, medicationDoseLogs, medications, passwordResetTokens, userProfiles, users, webauthnChallenges } from "../drizzle/schema";
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_ATTEMPT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 let pool: Pool | null = null;
 let database: ReturnType<typeof drizzle> | null = null;
@@ -93,8 +98,103 @@ export async function updateEmailForUser(userId: number, email: string) {
 export async function updatePasswordForUser(userId: number, passwordHash: string) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const updated = await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId)).returning({ id: users.id });
+  const updated = await db.update(users).set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1`, updatedAt: new Date() }).where(eq(users.id, userId)).returning({ id: users.id });
   if (!updated.length) throw new Error("RECORD_NOT_FOUND");
+}
+
+function normalizeLoginAttemptKey(email: string, clientAddress: string | null) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedAddress = clientAddress?.trim().slice(0, 128) || "unknown";
+  return createHash("sha256").update(`login:${normalizedEmail}:${normalizedAddress}`).digest("hex");
+}
+
+export function loginAttemptKeyForRequest(email: string, request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip");
+  return normalizeLoginAttemptKey(email, forwarded);
+}
+
+export async function assertLoginAttemptAllowed(keyHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const record = (await db.select({ blockedUntil: authRateLimits.blockedUntil }).from(authRateLimits).where(eq(authRateLimits.keyHash, keyHash)).limit(1))[0];
+  if (record?.blockedUntil && record.blockedUntil.getTime() > Date.now()) throw new Error("LOGIN_THROTTLED");
+}
+
+export async function recordFailedLoginAttempt(keyHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - LOGIN_WINDOW_MS);
+  const blockUntil = new Date(now.getTime() + LOGIN_BLOCK_MS);
+  await db.delete(authRateLimits).where(lt(authRateLimits.updatedAt, new Date(now.getTime() - LOGIN_ATTEMPT_RETENTION_MS)));
+  const existing = (await db.select().from(authRateLimits).where(eq(authRateLimits.keyHash, keyHash)).limit(1))[0];
+  const nextAttemptCount = !existing || existing.windowStartedAt.getTime() < windowStart.getTime() ? 1 : existing.attemptCount + 1;
+  const nextWindowStartedAt = !existing || existing.windowStartedAt.getTime() < windowStart.getTime() ? now : existing.windowStartedAt;
+  const nextBlockedUntil = nextAttemptCount >= LOGIN_MAX_ATTEMPTS ? blockUntil : null;
+  if (!existing) {
+    await db.insert(authRateLimits).values({ keyHash, attemptCount: nextAttemptCount, windowStartedAt: nextWindowStartedAt, blockedUntil: nextBlockedUntil, updatedAt: now });
+    return;
+  }
+  await db.update(authRateLimits).set({ attemptCount: nextAttemptCount, windowStartedAt: nextWindowStartedAt, blockedUntil: nextBlockedUntil, updatedAt: now }).where(eq(authRateLimits.keyHash, keyHash));
+}
+
+export async function clearFailedLoginAttempts(keyHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(authRateLimits).where(eq(authRateLimits.keyHash, keyHash));
+}
+
+export async function createPasswordResetTokenForUser(userId: number, tokenHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  await db.delete(passwordResetTokens).where(or(eq(passwordResetTokens.userId, userId), lt(passwordResetTokens.expiresAt, now)));
+  await db.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt: new Date(now.getTime() + 30 * 60 * 1000) });
+}
+
+export async function invalidatePasswordResetToken(tokenHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(and(eq(passwordResetTokens.tokenHash, tokenHash), isNull(passwordResetTokens.usedAt)));
+}
+
+export async function consumePasswordResetToken(tokenHash: string, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  return db.transaction(async tx => {
+    const consumed = await tx.update(passwordResetTokens).set({ usedAt: now }).where(and(eq(passwordResetTokens.tokenHash, tokenHash), isNull(passwordResetTokens.usedAt), gt(passwordResetTokens.expiresAt, now))).returning({ userId: passwordResetTokens.userId });
+    if (!consumed.length) return null;
+    await tx.update(users).set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1`, updatedAt: now }).where(eq(users.id, consumed[0].userId));
+    return consumed[0].userId;
+  });
+}
+
+export async function listHealthIntegrationConsentsForUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select().from(healthIntegrationConsents).where(and(eq(healthIntegrationConsents.userId, userId), isNull(healthIntegrationConsents.deletedAt)));
+}
+
+export async function saveHealthIntegrationConsentForUser(userId: number, input: { platform: "apple_health" | "health_connect"; scopes: string[] }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  const values = { userId, platform: input.platform, scopesJson: JSON.stringify(input.scopes), consentedAt: now, revokedAt: null, deletedAt: null };
+  await db.insert(healthIntegrationConsents).values(values).onConflictDoUpdate({ target: [healthIntegrationConsents.userId, healthIntegrationConsents.platform], set: values });
+  return (await listHealthIntegrationConsentsForUser(userId)).find(consent => consent.platform === input.platform) ?? null;
+}
+
+export async function revokeHealthIntegrationConsentForUser(userId: number, platform: "apple_health" | "health_connect") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(healthIntegrationConsents).set({ revokedAt: new Date() }).where(and(eq(healthIntegrationConsents.userId, userId), eq(healthIntegrationConsents.platform, platform), isNull(healthIntegrationConsents.deletedAt)));
+}
+
+export async function deleteHealthIntegrationConsentForUser(userId: number, platform: "apple_health" | "health_connect") {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.update(healthIntegrationConsents).set({ scopesJson: "[]", revokedAt: new Date(), deletedAt: new Date() }).where(and(eq(healthIntegrationConsents.userId, userId), eq(healthIntegrationConsents.platform, platform)));
 }
 
 export async function getProfileForUser(userId: number) {

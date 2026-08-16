@@ -24,7 +24,7 @@ export function publicUser(user: User): AuthenticatedUser {
 }
 
 export async function createLocalSession(user: User) {
-  return new SignJWT({ userId: user.id, type: "local" })
+  return new SignJWT({ userId: user.id, sessionVersion: user.sessionVersion ?? 1, type: "local" })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(Math.floor((Date.now() + SESSION_DURATION_MS) / 1000))
@@ -36,9 +36,9 @@ export async function getAuthenticatedUser(request: Request): Promise<Authentica
   if (!sessionToken) throw new AuthenticationError();
   try {
     const { payload } = await jwtVerify(sessionToken, sessionSecret(), { algorithms: ["HS256"] });
-    if (payload.type !== "local" || typeof payload.userId !== "number") throw new AuthenticationError();
+    if (payload.type !== "local" || typeof payload.userId !== "number" || typeof payload.sessionVersion !== "number") throw new AuthenticationError();
     const user = await db.getUserById(payload.userId);
-    if (!user || !user.passwordHash) throw new AuthenticationError();
+    if (!user || !user.passwordHash || payload.sessionVersion !== (user.sessionVersion ?? 1)) throw new AuthenticationError();
     return publicUser(user);
   } catch (error) {
     if (error instanceof AuthenticationError) throw error;

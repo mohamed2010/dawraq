@@ -9,6 +9,7 @@ import { CycleGuidancePanel } from "@/components/CycleGuidancePanel";
 import { HealthPatternAlerts } from "@/components/HealthPatternAlerts";
 import { LanguageController, type AppLanguage } from "@/components/LanguageController";
 import { AccountSecurityPanel, AppLockScreen, ClinicianSharingPanel, DeviceLockPanel, PrivacyToolsPanel } from "@/components/PrivacyTools";
+import { HealthIntegrationConsentPanel } from "@/components/HealthIntegrationConsentPanel";
 import { DailyHealthPanel, ProfileHealthPanel, ReferenceStatsPanel } from "@/components/ReferenceFeaturePanels";
 import { WellnessTrends } from "@/components/WellnessTrends";
 import { AccessibilityPanel, GeneralReminderPanel, LifeStagePanel, ReportsAndBackupPanel } from "@/components/EnhancementTools";
@@ -411,7 +412,7 @@ export default function Home() {
           {settingsSection === "preferences" && <><SettingsTab name={settingsName} setName={setSettingsName} cycleLength={settingsCycleLength} setCycleLength={setSettingsCycleLength} profile={profile} latestRecord={cycles[0] ?? null} onSubmit={saveSettings} onTheme={theme => saveCurrentProfile({ theme })} onLanguage={language => saveCurrentProfile({ language })} onStealth={() => saveCurrentProfile({ stealthMode: true })} onEditLatest={() => { if (cycles[0]) { openEditRecord(cycles[0]); } else { openNewRecord(); } }} onLogout={logout} busy={isBusy} preferencesOnly /><AccessibilityPanel userId={user!.id} /><GeneralReminderPanel userId={user!.id} nextPeriodStart={statistics.nextPeriodStart} /></>}
           {settingsSection === "wellbeing" && <LifeStagePanel userId={user!.id} />}
           {settingsSection === "data" && <><ReportsAndBackupPanel /><NotionImportPanel cycles={cycles} onImported={cyclesQuery.refetch} /></>}
-          {settingsSection === "security" && <><AccountSecurityPanel email={user!.email} onEmailChanged={refreshAccount} /><DeviceLockPanel /><ClinicianSharingPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /><section className="surface-card page-card settings-logout-card"><h2>تسجيل الخروج</h2><p>أنهي جلستكِ الحالية بأمان على هذا الجهاز.</p><button className="secondary-button" type="button" onClick={logout}><LogOut size={16} />تسجيل الخروج</button></section></>}
+          {settingsSection === "security" && <><AccountSecurityPanel email={user!.email} onEmailChanged={refreshAccount} /><DeviceLockPanel /><ClinicianSharingPanel /><HealthIntegrationConsentPanel /><PrivacyToolsPanel onLockStatusChange={appLockQuery.refetch} onAccountDeleted={logout} /><section className="surface-card page-card settings-logout-card"><h2>تسجيل الخروج</h2><p>أنهي جلستكِ الحالية بأمان على هذا الجهاز.</p><button className="secondary-button" type="button" onClick={logout}><LogOut size={16} />تسجيل الخروج</button></section></>}
         </SettingsWorkspace>}
       </div>
       <BrowserMedicationReminderController medications={medications} onDoseTaken={confirmReminderDose} />

@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   getUserByEmail: vi.fn(),
   recordLocalSignIn: vi.fn(),
   getUserById: vi.fn(),
+  loginAttemptKeyForRequest: vi.fn(() => "attempt-key"),
+  assertLoginAttemptAllowed: vi.fn(),
+  recordFailedLoginAttempt: vi.fn(),
+  clearFailedLoginAttempts: vi.fn(),
 }));
 
 vi.mock("./db", () => mocks);
@@ -25,6 +29,7 @@ const user = {
   createdAt: new Date(),
   updatedAt: new Date(),
   lastSignedIn: new Date(),
+  sessionVersion: 1,
 };
 
 function jsonRequest(path: string, body: unknown) {
@@ -35,6 +40,10 @@ describe("local authentication routes", () => {
   beforeEach(() => {
     process.env.JWT_SECRET = "a-secure-test-secret-that-is-at-least-32-characters";
     Object.values(mocks).forEach(mock => mock.mockReset());
+    mocks.loginAttemptKeyForRequest.mockReturnValue("attempt-key");
+    mocks.assertLoginAttemptAllowed.mockResolvedValue(undefined);
+    mocks.recordFailedLoginAttempt.mockResolvedValue(undefined);
+    mocks.clearFailedLoginAttempts.mockResolvedValue(undefined);
   });
 
   it("registers a local account without returning or storing a plain password", async () => {
@@ -56,11 +65,23 @@ describe("local authentication routes", () => {
 
     const loginResponse = await login(jsonRequest("/api/auth/login", { email: "local@example.com", password: "safe-password-123" }));
     expect(loginResponse.status).toBe(200);
+    expect(mocks.assertLoginAttemptAllowed).toHaveBeenCalledWith("attempt-key");
+    expect(mocks.clearFailedLoginAttempts).toHaveBeenCalledWith("attempt-key");
     expect(mocks.recordLocalSignIn).toHaveBeenCalledWith(user.id);
     expect(loginResponse.headers.get("set-cookie")).toContain("app_session_id=");
 
     const logoutResponse = await logout();
     expect(logoutResponse.status).toBe(200);
     expect(logoutResponse.headers.get("set-cookie")).toContain("app_session_id=");
+  });
+
+  it("records failed attempts without revealing whether the email exists", async () => {
+    mocks.getUserByEmail.mockResolvedValue(undefined);
+
+    const response = await login(jsonRequest("/api/auth/login", { email: "missing@example.com", password: "safe-password-123" }));
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحين." });
+    expect(mocks.recordFailedLoginAttempt).toHaveBeenCalledWith("attempt-key");
   });
 });

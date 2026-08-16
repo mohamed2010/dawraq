@@ -137,3 +137,25 @@
 - [x] Add browser security headers and reduce public operational details returned by the health endpoint.
 - [x] Shorten new local-session lifetimes and prevent use of the publicly documented example session secret.
 - [x] Mark sensitive clinician-share reports as non-indexable and non-cacheable by shared intermediaries.
+- [x] Remove the unused Vite, Express, tRPC, Axios, Recharts, and related template code and dependencies, then re-audit production packages.
+- [ ] Rotate the production JWT session secret and document a secure secret-rotation runbook without exposing secret values.
+- [x] Add login throttling and account-lockout-safe abuse controls with privacy-preserving audit events.
+- [x] Design and test a nonce-based Content Security Policy compatible with Next.js, WebAuthn, and the Arabic font assets.
+- [x] Add an operational monitoring checklist for authentication, database permission, and share-link failures with redacted logs only.
+- [ ] Add a secure logged-out password-reset flow after configuring an approved transactional email provider and verified sending domain.
+- [x] Add consent-first health-data integrations only after explicit platform approval, scopes, deletion controls, and privacy review.
+- [x] Add end-to-end production smoke tests for local authentication, private data isolation, WebAuthn, and report-share revocation.
+- [x] Establish dependency-update automation and a monthly security review cadence with test and build gates.
+- [x] Remove obsolete Vite/Express/tRPC source paths and migrate only still-relevant unit tests to the Next.js API surface.
+- [x] Implement a database-backed sliding-window login throttle with bounded retention and non-enumerating responses.
+- [x] Add session-version invalidation so password changes and secret rotation can revoke existing local sessions.
+- [x] Implement a nonce-capable CSP in Next.js middleware and verify all current assets under enforce mode.
+- [x] Add production-safe security health checks and a redacted runbook for on-call diagnosis.
+- [x] Prepare password-reset schema and routes; activate email delivery only after the user supplies an approved provider and verified sender domain.
+- [x] Prepare consent and deletion-control interfaces for future health-platform imports; do not activate external syncing before explicit approval.
+- [x] Add authenticated smoke-test scripts and a scheduled security-maintenance workflow after the scheduler configuration is reviewed.
+- [x] Add expiring, single-use, hashed password-reset tokens and generic request/confirm API routes.
+- [ ] Add a Resend delivery adapter guarded by server-only configuration and a verified sender domain.
+- [x] Add user-controlled health-integration consent records with explicit platform scope, revocation, and deletion controls.
+- [x] Add a monthly GitHub Actions security workflow running audit, type checks, tests, and production builds.
+- [x] Add a deployment smoke-test script that validates public health and unauthenticated access controls without user data.

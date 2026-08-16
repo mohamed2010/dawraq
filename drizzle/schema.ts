@@ -18,10 +18,38 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: userRole("role").notNull().default("user"),
+  sessionVersion: integer("session_version").notNull().default(1),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
 }, table => [uniqueIndex("users_email_unique").on(table.email)]);
+
+export const authRateLimits = pgTable("auth_rate_limits", {
+  keyHash: varchar("key_hash", { length: 64 }).primaryKey(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull().defaultNow(),
+  blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [index("password_reset_tokens_user_id_idx").on(table.userId), index("password_reset_tokens_expires_at_idx").on(table.expiresAt)]);
+
+export const healthIntegrationConsents = pgTable("health_integration_consents", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: varchar("platform", { length: 32 }).notNull(),
+  scopesJson: text("scopes_json").notNull(),
+  consentedAt: timestamp("consented_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, table => [uniqueIndex("health_integration_consents_user_platform_unique").on(table.userId, table.platform)]);
 
 export const userProfiles = pgTable("user_profiles", {
   id: serial("id").primaryKey(),

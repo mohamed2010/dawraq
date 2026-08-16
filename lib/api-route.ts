@@ -12,6 +12,8 @@ const knownMessages: Record<string, { status: number; message: string }> = {
   APP_LOCK_NOT_SET: { status: 409, message: "لم يتم إعداد رمز قفل للتطبيق بعد." },
   INVALID_APP_LOCK_PIN: { status: 401, message: "رمز قفل التطبيق غير صحيح." },
   INVALID_CURRENT_PASSWORD: { status: 401, message: "كلمة المرور الحالية غير صحيحة." },
+  LOGIN_THROTTLED: { status: 429, message: "تجاوزتِ عدد المحاولات المسموح به. انتظري قليلاً ثم حاولي مرة أخرى." },
+  INVALID_RESET_TOKEN: { status: 400, message: "رابط إعادة التعيين غير صالح أو انتهت صلاحيته." },
   WEBAUTHN_CHALLENGE_EXPIRED: { status: 409, message: "انتهت محاولة قفل الجهاز. ابدئي المحاولة مرة أخرى." },
   WEBAUTHN_VERIFICATION_FAILED: { status: 401, message: "تعذر التحقق من قفل الجهاز." },
 };

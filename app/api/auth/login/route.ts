@@ -10,8 +10,14 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const input = loginInput.parse(await jsonBody(request));
+    const attemptKey = db.loginAttemptKeyForRequest(input.email, request);
+    await db.assertLoginAttemptAllowed(attemptKey);
     const user = await db.getUserByEmail(input.email);
-    if (!user || !(await verifyPassword(input.password, user.passwordHash))) throw new Error("INVALID_CREDENTIALS");
+    if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+      await db.recordFailedLoginAttempt(attemptKey);
+      throw new Error("INVALID_CREDENTIALS");
+    }
+    await db.clearFailedLoginAttempts(attemptKey);
     await db.recordLocalSignIn(user.id);
     const response = NextResponse.json({ user: publicUser(user) });
     response.cookies.set(sessionCookie().name, await createLocalSession(user), sessionCookie());

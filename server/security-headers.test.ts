@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 import nextConfig from "../next.config";
+import { proxy } from "../proxy";
 
 describe("browser security headers", () => {
   it("sets baseline hardening headers on every route", async () => {
@@ -21,5 +23,13 @@ describe("browser security headers", () => {
       { key: "Cache-Control", value: "private, no-store, max-age=0" },
       { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive, nosnippet" },
     ]));
+  });
+
+  it("uses a per-request nonce CSP and prevents caching of authentication responses", () => {
+    const response = proxy(new NextRequest("https://zuhaira.test/api/auth/login"));
+
+    expect(response.headers.get("content-security-policy")).toMatch(/script-src 'self' 'nonce-[a-f0-9]+'/);
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
 });
