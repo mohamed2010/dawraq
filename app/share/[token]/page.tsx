@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getActiveClinicianShareByToken } from "../../../server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, nocache: true },
+};
 
 export default async function SharedClinicianReport({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

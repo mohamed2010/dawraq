@@ -127,3 +127,13 @@
 - [x] Fix the bottom navigation on desktop and mobile with an opaque surface and safe content spacing so it never overlaps page content.
 - [x] Fix the cycle editor modal transparency by applying explicit opaque dialog and overlay colors outside the themed application container, with a narrow contained scrollbar.
 - [x] Make the cycle editor fully usable at every viewport size, reserving room above the persistent bottom navigation and operating-system safe areas.
+- [x] Audit the repository, deployment configuration, and dependency set for exposed secrets, unsafe artifacts, and known security risks.
+- [x] Audit authentication, sessions, API authorization, account isolation, database policies, and browser-side data protection.
+- [x] Apply and verify any high-priority security fixes found during the audit.
+- [x] Replace tracked sample authentication values with non-sensitive placeholders and remove unused public Supabase browser configuration.
+- [x] Remove unused legacy Markdown rendering and storage dependencies that introduce transitive production vulnerabilities.
+- [x] Grant the application role least-privilege access to the WebAuthn and clinician-sharing tables so protected features work without widening public database access.
+- [x] Replace raw production error logging with redacted structured diagnostics that do not expose query values or personal data.
+- [x] Add browser security headers and reduce public operational details returned by the health endpoint.
+- [x] Shorten new local-session lifetimes and prevent use of the publicly documented example session secret.
+- [x] Mark sensitive clinician-share reports as non-indexable and non-cacheable by shared intermediaries.

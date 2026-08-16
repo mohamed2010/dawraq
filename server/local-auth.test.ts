@@ -53,4 +53,10 @@ describe("local account security", () => {
 
     await expect(getAuthenticatedUser(request)).rejects.toBeInstanceOf(AuthenticationError);
   });
+
+  it("rejects the publicly documented example session secret", async () => {
+    process.env.JWT_SECRET = "super-secret-cryptakey-jwt-token-2026";
+
+    await expect(createLocalSession(user)).rejects.toThrow("JWT_SECRET غير مضبوط بصورة آمنة.");
+  });
 });

@@ -10,13 +10,13 @@ describe("production health route", () => {
     mockGetDb.mockReset();
   });
 
-  it("reports a connected database when a minimal query succeeds", async () => {
+  it("reports an available service when a minimal query succeeds without exposing implementation details", async () => {
     mockGetDb.mockResolvedValue({ execute: vi.fn().mockResolvedValue(undefined) });
 
     const response = await GET();
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "ok", framework: "nextjs", database: "connected" });
+    await expect(response.json()).resolves.toEqual({ status: "ok" });
   });
 
   it("reports a missing database configuration without exposing connection details", async () => {
@@ -25,7 +25,7 @@ describe("production health route", () => {
     const response = await GET();
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ status: "ok", framework: "nextjs", database: "not_configured" });
+    await expect(response.json()).resolves.toEqual({ status: "unavailable" });
   });
 
   it("reports an unavailable database without returning the underlying error", async () => {
@@ -34,6 +34,6 @@ describe("production health route", () => {
     const response = await GET();
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({ status: "ok", framework: "nextjs", database: "unavailable" });
+    await expect(response.json()).resolves.toEqual({ status: "unavailable" });
   });
 });

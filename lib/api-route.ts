@@ -21,7 +21,8 @@ export function routeError(error: unknown) {
   if (error instanceof ZodError) return NextResponse.json({ error: "راجعي البيانات المدخلة ثم حاولي مرة أخرى." }, { status: 400 });
   const message = error instanceof Error ? error.message : "";
   if (knownMessages[message]) return NextResponse.json({ error: knownMessages[message].message }, { status: knownMessages[message].status });
-  console.error("[API] Unexpected route error", error);
+  const errorType = error instanceof Error ? error.constructor.name : "UnknownError";
+  console.error("[API] Unexpected route error", errorType);
   return NextResponse.json({ error: "تعذر حفظ البيانات الآن. لم يتم حذف أي بيانات." }, { status: 500 });
 }
 
