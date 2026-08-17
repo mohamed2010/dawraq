@@ -12,7 +12,7 @@ export function OfflineModeBar({ pendingChanges, onSynchronize }: { pendingChang
     try { await onSynchronize(); } finally { setSyncing(false); }
   };
   useEffect(() => {
-    if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw-v3.js", { updateViaCache: "none" }).catch(() => undefined);
     const markOnline = () => setOnline(true);
     const markOffline = () => setOnline(false);
     window.addEventListener("online", markOnline);

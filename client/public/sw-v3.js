@@ -20,13 +20,17 @@ self.addEventListener("fetch", event => {
 
   const acceptsHtml = request.headers.get("accept")?.includes("text/html");
   if (request.mode === "navigate" || acceptsHtml) {
-    event.respondWith(fetch(request, { cache: "no-store" }).catch(() => caches.match("/")));
+    event.respondWith(
+      fetch(request, { cache: "no-store" }).catch(() => caches.match("/")),
+    );
     return;
   }
 
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request).then(response => {
-      if (response.ok && response.type === "basic") void caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
+      if (response.ok && response.type === "basic") {
+        void caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
+      }
       return response;
     }).catch(() => caches.match("/"))),
   );

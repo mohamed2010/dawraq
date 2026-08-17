@@ -163,3 +163,36 @@
 - [x] Add a per-account font-size preference with normal, large, and extra-large options saved with user preferences.
 - [x] Add a responsive font-size control in settings and verify it on the supplied mobile viewport.
 - [x] Add an explicit save button, unsaved-change state, and success feedback for the account font-size preference.
+- [x] Measure the production site with Google PageSpeed Insights for mobile and desktop, recording Core Web Vitals and audit findings.
+- [x] Audit technical SEO: metadata, canonical URL, robots.txt, sitemap, structured data, indexing behavior, and Arabic/LTR metadata.
+- [x] Audit public landing-page content and accessibility signals that affect search discoverability without exposing private user data.
+- [x] Create a prioritized performance and SEO improvement plan with impact, effort, risks, and acceptance metrics.
+- [ ] Implement approved performance and SEO improvements, then re-run PageSpeed and production smoke checks.
+
+## Performance and SEO measurement notes
+- [ ] Record the PageSpeed test date, strategy, URL, and mobile/desktop scores without treating a single run as a permanent baseline.
+- [ ] Preserve before/after measurements for LCP, INP, CLS, TTFB, accessibility, best practices, and SEO.
+- [ ] Keep authenticated dashboard pages private and excluded from indexing; optimize only public entry points and share pages intentionally.
+
+## Dashboard technical and UI fixes
+- [ ] Audit the authenticated dashboard on mobile and desktop for runtime errors, failed requests, loading loops, overflow, and inaccessible controls.
+- [ ] Fix dashboard data-loading, empty, error, and retry states without weakening per-user authorization or privacy.
+- [ ] Improve dashboard responsive layout, card hierarchy, bottom navigation, dialogs, and dense sections at narrow widths.
+- [ ] Improve dashboard typography, contrast, focus states, touch targets, and reduced-motion behavior.
+- [ ] Add or update unit and interaction tests for the dashboard fixes and verify mobile/desktop screenshots before deployment.
+- [ ] Re-run production smoke checks, PageSpeed checks for the public page, and build validation after dashboard changes.
+
+## Test account and feature verification
+- [ ] Create a non-sensitive test account using a dedicated test identity and no real health data.
+- [ ] Verify login, onboarding, dashboard loading, cycle create/edit/delete, ongoing-cycle closure, and prediction/calendar rendering.
+- [ ] Verify daily mood/symptom entries, medications and dose reminders, settings, themes, stealth mode, font-size save, and offline behavior.
+- [ ] Verify export, share-link creation/revocation, account privacy controls, and unauthenticated access boundaries.
+- [ ] Run the core flows on a narrow mobile viewport and record defects with reproducible steps.
+- [ ] Remove test records/account when verification is complete unless retention is explicitly required.
+- [x] Fix the production landing-page login button when it fails to open the local account form, and add a regression test for the click flow.
+
+- [x] إصلاح بقاء Service Worker القديم على النطاق العام بحيث لا يعرض صفحة Vite القديمة أو يعطل زر الدخول بعد تحديث Next.js.
+- [x] إضافة اختبار انحدار لسياسة تحديث Service Worker والتنقل من الصفحة العامة إلى نموذج الحساب المحلي.
+- [x] إضافة robots.txt وsitemap.xml وبيانات Open Graph وJSON-LD للصفحة العامة مع استبعاد المسارات الخاصة.
+- [x] تحسين سياسة التخزين المؤقت للصفحة العامة والموارد لتقليل LCP دون تخزين HTML الخاص بالمستخدم.
+- [x] إزالة الاعتماديات غير المستخدمة بعد التحقق من عدم وجود استيرادات لها.
